@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/
+probe.sqlite
+probe.sqlite-journal
+
+# Governed record store: contains CRM/finance/personal/decision data.
+# Excluded pending an explicit call on visibility — do not remove without confirming.
+DaxxerOS_Local/
