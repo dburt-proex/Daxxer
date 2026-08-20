@@ -1,17 +1,21 @@
 # Daxxer
 
-A block-based workspace **desktop app** — pages, a block editor, and typed databases. Themed white / blue / orange. Built on Electron (same tech as Notion), so it runs in its own native window with a taskbar icon.
+A governed, local-first block workspace desktop app — pages, a block editor, typed databases, and an Electron shell with Notion-fidelity interaction work underway.
 
-**Storage (as of 2026-07-24):** this app used to persist to a flat `data/workspace.json` blob. It now persists to **DaxxerOS Local** (`../DaxxerOS_Local`) — every page and teamspace is a governed Markdown + YAML frontmatter record, indexed into SQLite, gated on creation, and archived (never hard-deleted) when you "delete" something in the UI. See `DaxxerOS_Local/CHANGELOG.md` and `daxxer/bridge.py` for what changed and why. `lib/store.js` now shells out to `python -m daxxer.bridge <op>` instead of reading/writing JSON directly — same function signatures, so nothing else in this app had to change.
+## Storage authority
 
-Requires Python + `pip install -e .` run once inside `DaxxerOS_Local` (already done if you followed the original setup). Run `daxxer index` inside `DaxxerOS_Local` after pulling these changes, before launching the app, so the SQLite projection picks up the new schema and the seeded starter workspace.
+Daxxer no longer persists to the old flat `data/workspace.json` blob. The source of truth is **DaxxerOS Local** (`../DaxxerOS_Local` in development, or the configured `DAXXER_ROOT`) where pages and teamspaces are governed Markdown + YAML frontmatter records indexed into SQLite.
+
+`lib/store.js` is a compatibility bridge: it shells out to `python -m daxxer.bridge <op>` while preserving the existing server/frontend function signatures. Deletes are recoverable archive operations rather than hard deletes.
+
+Requires Python plus `pip install -e .` inside `DaxxerOS_Local`. Run `daxxer index` there after pulling schema-affecting changes before launching the app.
 
 ## Run the desktop app
 
 ```bash
-cd daxxer
-npm install      # one-time: downloads Electron
-npm start        # opens the Daxxer desktop window
+cd Daxxer
+npm install
+npm start
 ```
 
 ## Build a double-clickable Daxxer.exe
@@ -21,57 +25,90 @@ npm run package
 # → dist/Daxxer-win32-x64/Daxxer.exe
 ```
 
-Copy that folder anywhere (or pin `Daxxer.exe` to the taskbar) and double-click to launch — no terminal needed. Your workspace data lives in the per-user app-data folder, so it persists across updates.
+The packaged application resolves the governed store separately from the read-only app bundle. Override its location with `DAXXER_ROOT` when needed.
 
-## Run as a plain web app (no Electron)
+## Run as a plain web app
 
 ```bash
-node server.js   # → http://localhost:4400  (zero dependencies)
+node server.js   # → http://localhost:4400
 ```
+
+## Validation
+
+```bash
+npm test
+npm run check
+```
+
+`npm run check` performs syntax validation for the server/editor fidelity scripts and runs the block-operation regression suite. It does not require Electron to launch.
 
 ## Features
 
-**Block system (the core)**
+### Block system
+
 - Block types: text, H1–H3, bulleted / numbered / to-do lists, toggle, quote, callout, divider, code.
-- **Slash menu** (`/`) to insert or convert any block.
-- **Markdown shortcuts**: `# ` → heading, `- ` → bullet, `1. ` → numbered, `[] ` → to-do, `> ` → quote, ` ``` ` → code.
+- Slash menu (`/`) to insert or convert supported blocks.
+- Markdown shortcuts: `# ` → heading, `- ` → bullet, `1. ` → numbered, `[] ` → to-do, `> ` → quote, triple-backtick → code.
 - Enter splits a block; Backspace at the start merges or un-formats.
 - To-do checkboxes, collapsible toggles with nested blocks, colored callouts.
-- Hover gutter to **add** a block or open block actions (duplicate, turn-into, color, delete). **Drag** the handle to reorder.
+- Hover gutter to add a block or open block actions; drag the handle to reorder.
 
-**Databases**
+### Notion-fidelity interaction pass 1
+
+- `Esc` selects the current block.
+- Up/Down navigates selected blocks.
+- Enter returns a selected block to editing.
+- Delete/Backspace removes a selected block.
+- `Ctrl/Cmd + D` duplicates a block with recursively unique nested IDs.
+- `Ctrl/Cmd + Shift + Up/Down` reorders within the containing block array.
+- Tab indents into the immediately previous toggle when valid; Shift+Tab outdents.
+- `Ctrl/Cmd + Enter` activates to-do and toggle blocks.
+
+See `docs/NOTION_FIDELITY_BUILD.md` for the phased parity program and persistence gates.
+
+### Databases
+
 - Table and Board views, switchable per database.
 - Typed properties: title, select, status, multi-select, checkbox, text, number.
 - Colored pills; create options inline by typing a new value.
 - Add rows and properties; open any row in a peek panel to edit all fields.
 - Drag cards between board columns to change their group.
 
-**Workspace**
-- Sidebar with teamspaces, nested page tree (expand/collapse), favorites, and recents.
-- Breadcrumbs, page icons (emoji picker), page titles, favorites.
-- Full-text **search** across titles, block text, and row titles (`Ctrl/⌘-K`).
-- Create / delete / nest pages; databases and doc pages.
+### Workspace
+
+- Sidebar with teamspaces, nested page tree, favorites, and recents.
+- Breadcrumbs, page icons, page titles, favorites.
+- Full-text search across titles, block text, and row titles (`Ctrl/⌘-K`).
+- Create, archive, restore, and nest pages; databases and document pages.
+- Governance, review queue, record history, and archive surfaces.
 
 ## Architecture
 
-```
-server.js         zero-dep node:http server + JSON API
+```text
+server.js                 node:http server + JSON API
 lib/
-  seed.js         starter workspace (teamspaces, pages, a database)
-  store.js        atomic JSON store (data/workspace.json)
-  search.js       workspace search
+  store.js                governed DaxxerOS Local bridge
+  search.js               workspace search
 public/
-  index.html      app shell
-  styles.css      white / blue / orange theme
-  icons.js        icons, block registry, tag colors, emoji set
-  editor.js       block editor (slash menu, markdown, drag, toggles)
-  database.js     table + board views, typed cells, row peek
-  app.js          sidebar, routing, top bar, search, emoji picker
+  index.html              app shell
+  styles.css              base application styles
+  notion-fidelity.css     Notion-fidelity geometry/selection layer
+  icons.js                icons, block registry, tag colors, emoji set
+  block-ops.js            pure/tested block-tree mutation helpers
+  editor.js               base block editor
+  notion-fidelity.js      keyboard/selection fidelity adapter
+  database.js             table + board views, typed cells, row peek
+  governance.js           governance/archive/audit UI surface
+  app.js                  sidebar, routing, top bar, search, emoji picker
 ```
-
-Data persists to `data/workspace.json`. Reset with `node lib/reset.js`.
 
 ## API
 
+Core endpoints:
+
 `GET /api/sidebar` · `GET /api/search?q=` · `POST /api/pages` ·
 `GET|PUT|DELETE /api/pages/:id` · `POST /api/pages/:id/favorite` · `POST /api/teamspaces`
+
+Governance endpoints:
+
+`GET /api/governance` · `GET /api/archived` · `POST /api/pages/:id/restore` · `GET /api/pages/:id/audit`

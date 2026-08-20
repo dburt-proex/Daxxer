@@ -8,6 +8,7 @@ window.Daxxer = window.Daxxer || {};
   if (!base || !Ops) return;
 
   const uid = () => "b_" + Math.random().toString(36).slice(2, 9);
+  let activeContext = null;
 
   function findBlockEl(target) {
     return target && target.closest ? target.closest(".block[data-id]") : null;
@@ -25,6 +26,28 @@ window.Daxxer = window.Daxxer || {};
     selection.removeAllRanges();
     selection.addRange(range);
   }
+
+  // The legacy editor's drag-handle context menu predates BlockOps and cloned
+  // only the root id. A toggle duplicate therefore reused child ids. Intercept
+  // that one action and route it through the recursive rekeying helper.
+  document.addEventListener("pointerdown", (e) => {
+    const handle = e.target.closest && e.target.closest(".gutter-drag");
+    if (!handle || !activeContext || !activeContext.container.contains(handle)) return;
+    const blockEl = findBlockEl(handle);
+    activeContext.contextBlockId = blockEl ? blockEl.dataset.id : null;
+  }, true);
+
+  document.addEventListener("click", (e) => {
+    const duplicateAction = e.target.closest && e.target.closest('#ctxMenu [data-act="dup"]');
+    if (!duplicateAction || !activeContext || !activeContext.contextBlockId) return;
+    const result = Ops.duplicate(activeContext.getBlocks(), activeContext.contextBlockId, uid);
+    if (!result.changed) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const menu = document.getElementById("ctxMenu");
+    if (menu) menu.hidden = true;
+    activeContext.remount({ focusId: result.id });
+  }, true);
 
   Daxxer.Editor.mount = function fidelityMount(container, page, opts = {}) {
     let activeApi = base(container, page, opts);
@@ -69,6 +92,13 @@ window.Daxxer = window.Daxxer || {};
         else if (selectId) select(selectId);
       });
     }
+
+    activeContext = {
+      container,
+      contextBlockId: null,
+      getBlocks: blocks,
+      remount,
+    };
 
     function currentIdFromEvent(e) {
       const blockEl = findBlockEl(e.target);
