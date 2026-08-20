@@ -24,5 +24,3 @@ jobs:
           npm --version
       - name: Run syntax and block-operation tests
         run: npm run check
-
-# CI retry probe: 2026-08-20
