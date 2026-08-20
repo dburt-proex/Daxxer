@@ -30,6 +30,12 @@ window.Daxxer = window.Daxxer || {};
     let activeApi = base(container, page, opts);
     let selectedId = null;
 
+    // Block-selection mode needs to retain keyboard ownership after an editable
+    // blurs on Escape. A programmatically-focusable host keeps Arrow/Delete/Enter
+    // events inside this editor instance rather than letting them fall through to body.
+    container.tabIndex = -1;
+    container.style.outline = "none";
+
     function blocks() { return activeApi.getBlocks(); }
 
     function clearSelection() {
@@ -43,6 +49,7 @@ window.Daxxer = window.Daxxer || {};
       if (!el) return;
       selectedId = id;
       el.classList.add("is-selected");
+      container.focus({ preventScroll: true });
       el.scrollIntoView({ block: "nearest" });
     }
 
