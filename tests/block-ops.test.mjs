@@ -14,6 +14,14 @@ const ids = () => {
   return () => `x_${++n}`;
 };
 
+function collectIds(blocks, out = []) {
+  for (const block of blocks) {
+    out.push(block.id);
+    if (Array.isArray(block.children)) collectIds(block.children, out);
+  }
+  return out;
+}
+
 test("locate finds nested blocks and parent", () => {
   const blocks = [{ id: "a", type: "toggle", children: [{ id: "b", type: "paragraph", text: "x" }] }];
   const found = Ops.locate("b", blocks);
@@ -21,14 +29,24 @@ test("locate finds nested blocks and parent", () => {
   assert.equal(found.parent.id, "a");
 });
 
-test("duplicate recursively rekeys child ids", () => {
-  const blocks = [{ id: "a", type: "toggle", children: [{ id: "b", type: "paragraph" }] }];
+test("duplicate recursively rekeys every descendant id", () => {
+  const blocks = [{
+    id: "a",
+    type: "toggle",
+    children: [{
+      id: "b",
+      type: "toggle",
+      children: [{ id: "c", type: "paragraph", text: "deep" }],
+    }],
+  }];
+  const originalIds = new Set(collectIds(blocks));
   const result = Ops.duplicate(blocks, "a", ids());
   assert.equal(result.changed, true);
   assert.equal(blocks.length, 2);
-  assert.notEqual(blocks[1].id, "a");
-  assert.notEqual(blocks[1].children[0].id, "b");
-  assert.notEqual(blocks[1].id, blocks[1].children[0].id);
+
+  const duplicateIds = collectIds([blocks[1]]);
+  assert.equal(new Set(duplicateIds).size, duplicateIds.length);
+  for (const id of duplicateIds) assert.equal(originalIds.has(id), false);
 });
 
 test("move reorders only within the containing array", () => {
