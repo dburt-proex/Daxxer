@@ -1,0 +1,35 @@
+/* Notion-fidelity pass 1: geometry and editor affordances only. */
+:root {
+  --nf-sidebar: #f7f7f5;
+  --nf-hover: rgba(55, 53, 47, 0.08);
+  --nf-text: rgb(55, 53, 47);
+  --nf-muted: rgba(55, 53, 47, 0.65);
+  --nf-selection: rgba(35, 131, 226, 0.14);
+  --nf-selection-line: rgb(35, 131, 226);
+}
+
+body { color: var(--nf-text); }
+#sidebar { background: var(--nf-sidebar); }
+.sb-link, .tree-row, .tb-btn, .breadcrumb { color: var(--nf-muted); }
+.sb-link:hover, .tree-row:hover, .icon-btn:hover, .tb-btn:hover { background: var(--nf-hover); }
+.tree-row.active { background: var(--nf-hover); color: var(--nf-text); font-weight: 500; }
+
+#pageContainer { max-width: 830px; padding-left: 62px; padding-right: 62px; }
+.page-title-input { font-size: 40px; font-weight: 700; letter-spacing: -0.025em; }
+.blocks { margin-top: 4px; }
+.block { border-radius: 3px; }
+.block:hover { background: rgba(55, 53, 47, 0.018); }
+.block.is-selected { background: var(--nf-selection); box-shadow: inset 2px 0 0 var(--nf-selection-line); }
+.block.is-selected > .block-gutter { opacity: 1; }
+.block.is-selected .editable { caret-color: transparent; }
+.editable { line-height: 1.5; padding-top: 3px; padding-bottom: 3px; }
+.block[data-type="paragraph"] .editable { font-size: 16px; }
+.block[data-type="heading1"] .editable { font-size: 30px; font-weight: 700; padding-top: 20px; }
+.block[data-type="heading2"] .editable { font-size: 24px; font-weight: 600; padding-top: 14px; }
+.block[data-type="heading3"] .editable { font-size: 20px; font-weight: 600; padding-top: 10px; }
+.block-gutter { left: -48px; }
+.gutter-btn { border-radius: 3px; }
+
+@media (max-width: 900px) {
+  #pageContainer { max-width: 100%; padding-left: 48px; padding-right: 36px; }
+}
