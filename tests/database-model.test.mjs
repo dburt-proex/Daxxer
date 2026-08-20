@@ -77,6 +77,67 @@ test("number normalization reports invalid values without overwriting them", () 
   assert.equal(state.rows[0].cells.score, "not-a-number");
 });
 
+test("date normalization validates calendar dates and preserves canonical ISO values", () => {
+  const state = {
+    properties: [{ id: "name", type: "title" }, { id: "due", type: "date" }],
+    rows: [
+      { id: "r1", cells: { due: " 2028-02-29 " } },
+      { id: "r2", cells: { due: "2027-02-29" } },
+      { id: "r3", cells: { due: "   " } },
+    ],
+  };
+  const errors = Model.normalizeTypedScalarCells(state);
+  assert.equal(state.rows[0].cells.due, "2028-02-29");
+  assert.equal(state.rows[2].cells.due, null);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].code, "invalid_date");
+  assert.equal(errors[0].rowId, "r2");
+  assert.equal(state.rows[1].cells.due, "2027-02-29");
+});
+
+test("date ranges normalize single dates and reject reversed ranges without overwriting them", () => {
+  const reversed = { start: "2026-08-20", end: "2026-08-19" };
+  const state = {
+    properties: [{ id: "name", type: "title" }, { id: "window", type: "date_range" }],
+    rows: [
+      { id: "r1", cells: { window: "2026-08-20" } },
+      { id: "r2", cells: { window: { start: "2026-08-20", end: "2026-08-22" } } },
+      { id: "r3", cells: { window: reversed } },
+    ],
+  };
+  const errors = Model.normalizeTypedScalarCells(state);
+  assert.equal(state.rows[0].cells.window.start, "2026-08-20");
+  assert.equal(state.rows[0].cells.window.end, null);
+  assert.equal(state.rows[1].cells.window.start, "2026-08-20");
+  assert.equal(state.rows[1].cells.window.end, "2026-08-22");
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].code, "invalid_date_range");
+  assert.equal(state.rows[2].cells.window, reversed);
+});
+
+test("url email and phone normalization trims valid scalar values and flags malformed values", () => {
+  const state = {
+    properties: [
+      { id: "name", type: "title" },
+      { id: "site", type: "url" },
+      { id: "mail", type: "email" },
+      { id: "phone", type: "phone" },
+    ],
+    rows: [
+      { id: "ok", cells: { site: " https://example.com/a?b=1 ", mail: " drew@example.com ", phone: " +1 (507) 555-0123 " } },
+      { id: "bad", cells: { site: "example.com", mail: "missing-at.example.com", phone: "call-me" } },
+    ],
+  };
+  const errors = Model.normalizeTypedScalarCells(state);
+  assert.equal(state.rows[0].cells.site, "https://example.com/a?b=1");
+  assert.equal(state.rows[0].cells.mail, "drew@example.com");
+  assert.equal(state.rows[0].cells.phone, "+1 (507) 555-0123");
+  assert.deepEqual(new Set(errors.map((error) => error.code)), new Set(["invalid_url", "invalid_email", "invalid_phone"]));
+  assert.equal(state.rows[1].cells.site, "example.com");
+  assert.equal(state.rows[1].cells.mail, "missing-at.example.com");
+  assert.equal(state.rows[1].cells.phone, "call-me");
+});
+
 test("validation fails visibly on duplicate identifiers and multiple title properties", () => {
   const errors = Model.validateState({
     properties: [
