@@ -3,6 +3,10 @@ window.Daxxer = window.Daxxer || {};
 
 (function () {
   const fallbackId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const URL_RE = /^https?:\/\/[^\s]+$/i;
+  const PHONE_RE = /^[+0-9().\-\s#xX]+$/;
 
   function normalizePage(page, makeId = fallbackId) {
     const next = structuredClone(page || {});
@@ -84,6 +88,106 @@ window.Daxxer = window.Daxxer || {};
     return errors;
   }
 
+  function isIsoDate(value) {
+    if (typeof value !== "string" || !DATE_RE.test(value)) return false;
+    const [year, month, day] = value.split("-").map(Number);
+    if (month < 1 || month > 12 || day < 1) return false;
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return day <= days[month - 1];
+  }
+
+  function scalarError(errors, code, row, property, value) {
+    errors.push({ code, rowId: row.id, propId: property.id, value });
+  }
+
+  function normalizeTypedScalarCells(state) {
+    const errors = [];
+    const properties = Array.isArray(state && state.properties) ? state.properties : [];
+    const rows = Array.isArray(state && state.rows) ? state.rows : [];
+    const supported = new Set(["date", "date_range", "url", "email", "phone"]);
+    const scalarProps = properties.filter((p) => p && p.id && supported.has(p.type));
+
+    for (const row of rows) {
+      if (!row || !row.cells || typeof row.cells !== "object" || Array.isArray(row.cells)) continue;
+      for (const property of scalarProps) {
+        const value = row.cells[property.id];
+        if (value == null) continue;
+
+        if (property.type === "date") {
+          if (typeof value !== "string") {
+            scalarError(errors, "invalid_date", row, property, value);
+            continue;
+          }
+          const trimmed = value.trim();
+          if (!trimmed) row.cells[property.id] = null;
+          else if (isIsoDate(trimmed)) row.cells[property.id] = trimmed;
+          else scalarError(errors, "invalid_date", row, property, value);
+          continue;
+        }
+
+        if (property.type === "date_range") {
+          let start;
+          let end;
+          if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (!trimmed) {
+              row.cells[property.id] = null;
+              continue;
+            }
+            start = trimmed;
+            end = null;
+          } else if (typeof value === "object" && !Array.isArray(value)) {
+            start = typeof value.start === "string" ? value.start.trim() : "";
+            end = value.end == null ? null : (typeof value.end === "string" ? value.end.trim() : value.end);
+            if (end === "") end = null;
+          } else {
+            scalarError(errors, "invalid_date_range", row, property, value);
+            continue;
+          }
+
+          if (!isIsoDate(start) || (end != null && (!isIsoDate(end) || end < start))) {
+            scalarError(errors, "invalid_date_range", row, property, value);
+          } else {
+            row.cells[property.id] = { start, end };
+          }
+          continue;
+        }
+
+        if (typeof value !== "string") {
+          scalarError(errors, `invalid_${property.type}`, row, property, value);
+          continue;
+        }
+
+        const trimmed = value.trim();
+        if (!trimmed) {
+          row.cells[property.id] = null;
+          continue;
+        }
+
+        if (property.type === "url") {
+          if (URL_RE.test(trimmed)) row.cells[property.id] = trimmed;
+          else scalarError(errors, "invalid_url", row, property, value);
+          continue;
+        }
+
+        if (property.type === "email") {
+          if (EMAIL_RE.test(trimmed)) row.cells[property.id] = trimmed;
+          else scalarError(errors, "invalid_email", row, property, value);
+          continue;
+        }
+
+        if (property.type === "phone") {
+          const digitCount = (trimmed.match(/\d/g) || []).length;
+          if (PHONE_RE.test(trimmed) && digitCount >= 3) row.cells[property.id] = trimmed;
+          else scalarError(errors, "invalid_phone", row, property, value);
+        }
+      }
+    }
+
+    return errors;
+  }
+
   function validateState(state) {
     const errors = [];
     const properties = Array.isArray(state && state.properties) ? state.properties : [];
@@ -117,5 +221,12 @@ window.Daxxer = window.Daxxer || {};
     return errors;
   }
 
-  Daxxer.DatabaseModel = { normalizePage, normalizeNumberCells, validateState, duplicateIds };
+  Daxxer.DatabaseModel = {
+    normalizePage,
+    normalizeNumberCells,
+    normalizeTypedScalarCells,
+    validateState,
+    duplicateIds,
+    isIsoDate,
+  };
 })();
