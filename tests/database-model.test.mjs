@@ -106,11 +106,13 @@ test("date ranges normalize single dates and reject reversed ranges without over
     ],
   };
   const errors = Model.normalizeTypedScalarCells(state);
-  assert.deepEqual(state.rows[0].cells.window, { start: "2026-08-20", end: null });
-  assert.deepEqual(state.rows[1].cells.window, { start: "2026-08-20", end: "2026-08-22" });
+  assert.equal(state.rows[0].cells.window.start, "2026-08-20");
+  assert.equal(state.rows[0].cells.window.end, null);
+  assert.equal(state.rows[1].cells.window.start, "2026-08-20");
+  assert.equal(state.rows[1].cells.window.end, "2026-08-22");
   assert.equal(errors.length, 1);
   assert.equal(errors[0].code, "invalid_date_range");
-  assert.deepEqual(state.rows[2].cells.window, reversed);
+  assert.equal(state.rows[2].cells.window, reversed);
 });
 
 test("url email and phone normalization trims valid scalar values and flags malformed values", () => {
