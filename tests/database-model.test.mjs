@@ -43,6 +43,40 @@ test("unsafe board-first state falls back to a table view when no grouping prope
   assert.equal(page.views.some((v) => v.type === "board"), true);
 });
 
+test("number normalization converts numeric strings, preserves zero, and clears blanks", () => {
+  const state = {
+    properties: [
+      { id: "name", type: "title" },
+      { id: "score", type: "number" },
+    ],
+    rows: [
+      { id: "r1", cells: { score: "42.5" } },
+      { id: "r2", cells: { score: "0" } },
+      { id: "r3", cells: { score: "   " } },
+    ],
+  };
+  assert.deepEqual(Model.normalizeNumberCells(state), []);
+  assert.equal(state.rows[0].cells.score, 42.5);
+  assert.equal(state.rows[1].cells.score, 0);
+  assert.equal(state.rows[2].cells.score, null);
+});
+
+test("number normalization reports invalid values without overwriting them", () => {
+  const state = {
+    properties: [
+      { id: "name", type: "title" },
+      { id: "score", type: "number" },
+    ],
+    rows: [{ id: "r1", cells: { score: "not-a-number" } }],
+  };
+  const errors = Model.normalizeNumberCells(state);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].code, "invalid_number");
+  assert.equal(errors[0].rowId, "r1");
+  assert.equal(errors[0].propId, "score");
+  assert.equal(state.rows[0].cells.score, "not-a-number");
+});
+
 test("validation fails visibly on duplicate identifiers and multiple title properties", () => {
   const errors = Model.validateState({
     properties: [
