@@ -20,7 +20,7 @@ test("normalization adds only the minimum title property and table view", () => 
   assert.equal(page.properties[0].type, "title");
   assert.equal(page.views.length, 1);
   assert.equal(page.views[0].type, "table");
-  assert.deepEqual(page.rows, []);
+  assert.equal(page.rows.length, 0);
 });
 
 test("normalization repairs missing row cells without deleting row fields", () => {
@@ -29,7 +29,7 @@ test("normalization repairs missing row cells without deleting row fields", () =
     views: [{ id: "table", name: "Table", type: "table" }],
     rows: [{ id: "r1", legacy: "keep" }],
   }, ids());
-  assert.deepEqual(page.rows[0].cells, {});
+  assert.equal(Object.keys(page.rows[0].cells).length, 0);
   assert.equal(page.rows[0].legacy, "keep");
 });
 
@@ -55,7 +55,7 @@ test("number normalization converts numeric strings, preserves zero, and clears 
       { id: "r3", cells: { score: "   " } },
     ],
   };
-  assert.deepEqual(Model.normalizeNumberCells(state), []);
+  assert.equal(Model.normalizeNumberCells(state).length, 0);
   assert.equal(state.rows[0].cells.score, 42.5);
   assert.equal(state.rows[1].cells.score, 0);
   assert.equal(state.rows[2].cells.score, null);
@@ -95,5 +95,5 @@ test("validation fails visibly on duplicate identifiers and multiple title prope
 
 test("a normalized minimal database validates cleanly", () => {
   const page = Model.normalizePage({}, ids());
-  assert.deepEqual(Model.validateState(page), []);
+  assert.equal(Model.validateState(page).length, 0);
 });
