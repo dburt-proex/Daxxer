@@ -64,6 +64,16 @@ window.Daxxer = window.Daxxer || {};
     return { changed: true, id };
   }
 
+  function setToggleOpen(blocks, id, open) {
+    const loc = locate(id, blocks);
+    if (!loc || loc.block.type !== "toggle") return { changed: false };
+    const next = !!open;
+    const current = loc.block.open !== false;
+    if (current === next) return { changed: false, id };
+    loc.block.open = next;
+    return { changed: true, id };
+  }
+
   function remove(blocks, id, makeId) {
     const loc = locate(id, blocks);
     if (!loc) return { changed: false };
@@ -72,5 +82,5 @@ window.Daxxer = window.Daxxer || {};
     return { changed: true };
   }
 
-  Daxxer.BlockOps = { locate, cloneWithNewIds, duplicate, move, indentIntoToggle, outdent, remove };
+  Daxxer.BlockOps = { locate, cloneWithNewIds, duplicate, move, indentIntoToggle, outdent, setToggleOpen, remove };
 })();

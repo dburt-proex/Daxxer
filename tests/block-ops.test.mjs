@@ -65,6 +65,17 @@ test("indent is allowed only into the previous toggle and outdent reverses it", 
   assert.deepEqual(blocks.map((b) => b.id), ["t", "p"]);
 });
 
+test("toggle open state changes only when target is a toggle and state differs", () => {
+  const blocks = [
+    { id: "t", type: "toggle", open: true, children: [] },
+    { id: "p", type: "paragraph", text: "x" },
+  ];
+  assert.equal(Ops.setToggleOpen(blocks, "t", false).changed, true);
+  assert.equal(blocks[0].open, false);
+  assert.equal(Ops.setToggleOpen(blocks, "t", false).changed, false);
+  assert.equal(Ops.setToggleOpen(blocks, "p", true).changed, false);
+});
+
 test("remove never leaves the page with zero top-level blocks", () => {
   const blocks = [{ id: "only", type: "paragraph", text: "" }];
   const makeId = ids();
