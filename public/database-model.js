@@ -49,6 +49,41 @@ window.Daxxer = window.Daxxer || {};
     return [...duplicates];
   }
 
+  function normalizeNumberCells(state) {
+    const errors = [];
+    const properties = Array.isArray(state && state.properties) ? state.properties : [];
+    const rows = Array.isArray(state && state.rows) ? state.rows : [];
+    const numberProps = properties.filter((p) => p && p.type === "number" && p.id);
+
+    for (const row of rows) {
+      if (!row || !row.cells || typeof row.cells !== "object" || Array.isArray(row.cells)) continue;
+      for (const property of numberProps) {
+        const value = row.cells[property.id];
+        if (value == null) continue;
+        if (typeof value === "number") {
+          if (!Number.isFinite(value)) {
+            errors.push({ code: "invalid_number", rowId: row.id, propId: property.id, value });
+          }
+          continue;
+        }
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (trimmed === "") {
+            row.cells[property.id] = null;
+            continue;
+          }
+          const parsed = Number(trimmed);
+          if (Number.isFinite(parsed)) row.cells[property.id] = parsed;
+          else errors.push({ code: "invalid_number", rowId: row.id, propId: property.id, value });
+          continue;
+        }
+        errors.push({ code: "invalid_number", rowId: row.id, propId: property.id, value });
+      }
+    }
+
+    return errors;
+  }
+
   function validateState(state) {
     const errors = [];
     const properties = Array.isArray(state && state.properties) ? state.properties : [];
@@ -82,5 +117,5 @@ window.Daxxer = window.Daxxer || {};
     return errors;
   }
 
-  Daxxer.DatabaseModel = { normalizePage, validateState, duplicateIds };
+  Daxxer.DatabaseModel = { normalizePage, normalizeNumberCells, validateState, duplicateIds };
 })();
