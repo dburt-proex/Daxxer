@@ -27,6 +27,17 @@ window.Daxxer = window.Daxxer || {};
     selection.addRange(range);
   }
 
+  function caretAtStart(el) {
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return false;
+    const range = selection.getRangeAt(0);
+    if (!el.contains(range.startContainer)) return false;
+    const before = range.cloneRange();
+    before.selectNodeContents(el);
+    before.setEnd(range.startContainer, range.startOffset);
+    return before.toString().length === 0;
+  }
+
   // The legacy editor's drag-handle context menu predates BlockOps and cloned
   // only the root id. A toggle duplicate therefore reused child ids. Intercept
   // that one action and route it through the recursive rekeying helper.
@@ -82,13 +93,13 @@ window.Daxxer = window.Daxxer || {};
         .map((el) => el.dataset.id);
     }
 
-    function remount({ focusId = null, selectId = null } = {}) {
+    function remount({ focusId = null, focusAtStart = false, selectId = null } = {}) {
       const currentBlocks = blocks();
       page.blocks = currentBlocks;
       if (opts.onChange) opts.onChange(currentBlocks);
       activeApi = base(container, page, opts);
       requestAnimationFrame(() => {
-        if (focusId) focusEditable(container, focusId);
+        if (focusId) focusEditable(container, focusId, !focusAtStart);
         else if (selectId) select(selectId);
       });
     }
@@ -136,6 +147,15 @@ window.Daxxer = window.Daxxer || {};
           if (ids[next]) select(ids[next]);
           return;
         }
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+          const result = Ops.setToggleOpen(blocks(), selectedId, e.key === "ArrowRight");
+          if (result.changed) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            remount({ selectId: selectedId });
+          }
+          return;
+        }
         if (e.key === "Delete" || e.key === "Backspace") {
           e.preventDefault(); e.stopImmediatePropagation();
           const nextId = ids[pos + 1] || ids[pos - 1] || null;
@@ -159,6 +179,19 @@ window.Daxxer = window.Daxxer || {};
         const result = Ops.move(blocks(), id, e.key === "ArrowUp" ? -1 : 1);
         handleMutation(result, selectedId ? "select" : "focus");
         return;
+      }
+
+      if (editable && e.key === "Backspace" && caretAtStart(editable)) {
+        const loc = Ops.locate(id, blocks());
+        if (loc && loc.parent) {
+          const result = Ops.outdent(blocks(), id);
+          if (result.changed) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            remount({ focusId: id, focusAtStart: true });
+            return;
+          }
+        }
       }
 
       if (editable && e.key === "Tab") {
