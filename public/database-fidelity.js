@@ -7,36 +7,63 @@ window.Daxxer = window.Daxxer || {};
   const Model = Daxxer.DatabaseModel;
   if (!base || !Model) return;
 
-  const numberKey = (error) => `${error.rowId || ""}|${error.propId || ""}`;
+  const errorKey = (error) => `${error.rowId || ""}|${error.propId || ""}`;
+  const typedKinds = new Set(["date", "date_range", "url", "email", "phone"]);
 
-  function numberCells(container) {
+  function dataCells(container) {
     return Array.from(container.querySelectorAll("[data-row][data-prop]"));
   }
 
-  function clearNumberErrors(container) {
-    numberCells(container).forEach((cell) => {
+  function errorValue(value) {
+    if (value && typeof value === "object") {
+      try { return JSON.stringify(value); } catch (_) { return String(value); }
+    }
+    return String(value);
+  }
+
+  function clearModelErrors(container) {
+    dataCells(container).forEach((cell) => {
       cell.style.outline = "";
       cell.style.outlineOffset = "";
       cell.style.background = "";
-      if (cell.dataset.numberError === "1") {
+      if (cell.dataset.modelError === "1") {
         cell.removeAttribute("title");
-        delete cell.dataset.numberError;
+        delete cell.dataset.modelError;
       }
     });
   }
 
-  function markNumberErrors(container, errors) {
-    clearNumberErrors(container);
+  function errorMessage(error) {
+    const messages = {
+      invalid_number: "Enter a valid finite number.",
+      invalid_date: "Enter a valid date in YYYY-MM-DD form.",
+      invalid_date_range: "Enter a valid date range whose end is not before its start.",
+      invalid_url: "Enter an absolute http:// or https:// URL.",
+      invalid_email: "Enter a valid email address.",
+      invalid_phone: "Enter a phone value containing at least three digits and standard phone punctuation.",
+    };
+    return `${messages[error.code] || "Enter a valid value."} Current value: ${errorValue(error.value)}`;
+  }
+
+  function markModelErrors(container, errors) {
+    clearModelErrors(container);
     for (const error of errors) {
-      const cell = numberCells(container).find((el) =>
+      const cell = dataCells(container).find((el) =>
         el.dataset.row === String(error.rowId) && el.dataset.prop === String(error.propId));
       if (!cell) continue;
-      cell.dataset.numberError = "1";
-      cell.title = `Enter a valid number. Current value: ${String(error.value)}`;
+      cell.dataset.modelError = "1";
+      cell.title = errorMessage(error);
       cell.style.outline = "1px solid rgba(235, 87, 87, 0.8)";
       cell.style.outlineOffset = "-1px";
       cell.style.background = "rgba(235, 87, 87, 0.06)";
     }
+  }
+
+  function collectTypedErrors(state) {
+    return [
+      ...Model.normalizeNumberCells(state),
+      ...Model.normalizeTypedScalarCells(state),
+    ];
   }
 
   function patchZeroDisplays(container, state) {
@@ -45,12 +72,93 @@ window.Daxxer = window.Daxxer || {};
     const numberIds = new Set(properties.filter((p) => p && p.type === "number").map((p) => String(p.id)));
     const rowMap = new Map(rows.filter(Boolean).map((row) => [String(row.id), row]));
 
-    for (const cell of numberCells(container)) {
+    for (const cell of dataCells(container)) {
       if (!numberIds.has(cell.dataset.prop)) continue;
       const row = rowMap.get(cell.dataset.row);
       if (!row || !row.cells || row.cells[cell.dataset.prop] !== 0) continue;
       const editable = cell.querySelector(".ct-text");
       if (editable && editable.textContent === "") editable.textContent = "0";
+    }
+  }
+
+  function inputStyle() {
+    return "width:100%;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:inherit;padding:1px 0";
+  }
+
+  function wireTextInput(input, commit) {
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        input.blur();
+      }
+    });
+  }
+
+  function dateInputHtml(value, field) {
+    const text = value == null ? "" : String(value);
+    const type = !text || Model.isIsoDate(text) ? "date" : "text";
+    return `<input data-daxxer-typed="1" data-field="${field}" type="${type}" value="${text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]))}" style="${inputStyle()}" />`;
+  }
+
+  function patchTypedEditors(container, state, commitState) {
+    const properties = Array.isArray(state && state.properties) ? state.properties : [];
+    const rows = Array.isArray(state && state.rows) ? state.rows : [];
+    const propMap = new Map(properties.filter(Boolean).map((property) => [String(property.id), property]));
+    const rowMap = new Map(rows.filter(Boolean).map((row) => [String(row.id), row]));
+
+    for (const cell of dataCells(container)) {
+      const property = propMap.get(cell.dataset.prop);
+      if (!property || !typedKinds.has(property.type)) continue;
+      if (cell.querySelector('[data-daxxer-typed="1"]')) continue;
+
+      const row = rowMap.get(cell.dataset.row);
+      if (!row || !row.cells) continue;
+      const value = row.cells[property.id];
+
+      if (property.type === "date") {
+        cell.innerHTML = dateInputHtml(value, "value");
+        const input = cell.querySelector('[data-daxxer-typed="1"]');
+        const commit = () => {
+          row.cells[property.id] = input.value || null;
+          commitState(state);
+        };
+        input.addEventListener("change", commit);
+        wireTextInput(input, commit);
+        continue;
+      }
+
+      if (property.type === "date_range") {
+        const start = value && typeof value === "object" && !Array.isArray(value) ? value.start : value;
+        const end = value && typeof value === "object" && !Array.isArray(value) ? value.end : null;
+        cell.innerHTML = `<div style="display:flex;align-items:center;gap:6px">${dateInputHtml(start, "start")}<span style="color:var(--text-mute)">→</span>${dateInputHtml(end, "end")}</div>`;
+        const startInput = cell.querySelector('[data-field="start"]');
+        const endInput = cell.querySelector('[data-field="end"]');
+        const commit = () => {
+          if (!startInput.value && !endInput.value) row.cells[property.id] = null;
+          else row.cells[property.id] = { start: startInput.value, end: endInput.value || null };
+          commitState(state);
+        };
+        startInput.addEventListener("change", commit);
+        endInput.addEventListener("change", commit);
+        wireTextInput(startInput, commit);
+        wireTextInput(endInput, commit);
+        continue;
+      }
+
+      const inputType = property.type === "email" ? "email" : property.type === "phone" ? "tel" : "url";
+      const input = document.createElement("input");
+      input.dataset.daxxerTyped = "1";
+      input.dataset.field = "value";
+      input.type = inputType;
+      input.value = value == null ? "" : String(value);
+      input.style.cssText = inputStyle();
+      cell.innerHTML = "";
+      cell.appendChild(input);
+      wireTextInput(input, () => {
+        row.cells[property.id] = input.value || null;
+        commitState(state);
+      });
     }
   }
 
@@ -92,37 +200,43 @@ window.Daxxer = window.Daxxer || {};
       return { getState: () => normalized, errors: structuralErrors };
     }
 
-    const initialNumberErrors = Model.normalizeNumberCells(normalized);
-    let toleratedInvalid = new Map(initialNumberErrors.map((error) => [numberKey(error), String(error.value)]));
+    const initialTypedErrors = collectTypedErrors(normalized);
+    let toleratedInvalid = new Map(initialTypedErrors.map((error) => [errorKey(error), errorValue(error.value)]));
     let currentState = normalized;
 
     function onChange(state) {
       currentState = state;
-      const numberErrors = Model.normalizeNumberCells(state);
-      markNumberErrors(container, numberErrors);
+      const typedErrors = collectTypedErrors(state);
+      markModelErrors(container, typedErrors);
 
-      // Do not make an existing malformed legacy number prevent unrelated edits,
-      // but reject any newly-created or changed invalid number value from persistence.
-      const newlyInvalid = numberErrors.filter((error) => {
-        const prior = toleratedInvalid.get(numberKey(error));
-        return prior === undefined || prior !== String(error.value);
+      // Existing malformed legacy values may remain visible while unrelated edits
+      // continue. Newly-created or changed invalid typed values do not persist.
+      const newlyInvalid = typedErrors.filter((error) => {
+        const prior = toleratedInvalid.get(errorKey(error));
+        return prior === undefined || prior !== errorValue(error.value);
       });
       if (newlyInvalid.length) return;
 
-      toleratedInvalid = new Map(numberErrors.map((error) => [numberKey(error), String(error.value)]));
+      toleratedInvalid = new Map(typedErrors.map((error) => [errorKey(error), errorValue(error.value)]));
       if (opts.onChange) opts.onChange(state);
       setTimeout(() => patchZeroDisplays(container, currentState), 0);
     }
 
     const api = base(container, normalized, { ...opts, onChange });
     currentState = api && api.getState ? api.getState() : normalized;
-    markNumberErrors(container, initialNumberErrors);
-    setTimeout(() => patchZeroDisplays(container, currentState), 0);
+    markModelErrors(container, initialTypedErrors);
+
+    const repatch = () => setTimeout(() => {
+      patchZeroDisplays(container, currentState);
+      patchTypedEditors(container, currentState, onChange);
+      markModelErrors(container, collectTypedErrors(currentState));
+    }, 0);
+
+    repatch();
 
     // Internal database rerenders can happen without onChange (for example view
-    // switches). Re-apply the zero display fix after user interactions that can
-    // trigger those rerenders while leaving the renderer implementation isolated.
-    const repatch = () => setTimeout(() => patchZeroDisplays(container, currentState), 0);
+    // switches). Re-apply typed editors and value patches after interactions that
+    // can trigger those rerenders while leaving the base renderer isolated.
     container.addEventListener("click", repatch);
     container.addEventListener("drop", repatch);
 
