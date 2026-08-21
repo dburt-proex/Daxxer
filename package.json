@@ -11,7 +11,7 @@
     "seed": "node lib/reset.js",
     "icon": "node electron/make-icon.cjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check server.js && node --check public/editor.js && node --check public/block-ops.js && node --check public/notion-fidelity.js && node --check public/database-model.js && node --check public/formula-engine.js && node --check public/database.js && node --check public/database-fidelity.js && node --test tests/*.test.mjs",
+    "check": "node --check server.js && node --check public/editor.js && node --check public/block-ops.js && node --check public/block-schema.js && node --check public/notion-fidelity.js && node --check public/database-model.js && node --check public/formula-engine.js && node --check public/database.js && node --check public/database-fidelity.js && node --test tests/*.test.mjs",
     "package": "electron-packager . Daxxer --platform=win32 --arch=x64 --out=dist --overwrite --no-asar --icon=electron/icon.ico --ignore=\"^/DaxxerOS_Local\" --ignore=\"^/dist\" --ignore=\"^/data\""
   },
   "engines": { "node": ">=18" },
