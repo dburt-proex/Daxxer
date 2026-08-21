@@ -4,9 +4,11 @@ window.Daxxer = window.Daxxer || {};
 (function () {
   const fallbackId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const URL_RE = /^https?:\/\/[^\s]+$/i;
   const PHONE_RE = /^[+0-9().\-\s#xX]+$/;
+  const SYSTEM_TYPES = new Set(["unique_id", "created_time", "last_edited_time"]);
 
   function normalizePage(page, makeId = fallbackId) {
     const next = structuredClone(page || {});
@@ -95,6 +97,10 @@ window.Daxxer = window.Daxxer || {};
     const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
     const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     return day <= days[month - 1];
+  }
+
+  function isIsoTimestamp(value) {
+    return typeof value === "string" && ISO_TIMESTAMP_RE.test(value) && Number.isFinite(Date.parse(value));
   }
 
   function scalarError(errors, code, row, property, value) {
@@ -188,6 +194,74 @@ window.Daxxer = window.Daxxer || {};
     return errors;
   }
 
+  function uniqueIdForRow(row, property = {}) {
+    if (!row || !row.id) return "";
+    const prefix = typeof property.prefix === "string" ? property.prefix : "ID-";
+    return `${prefix}${String(row.id)}`;
+  }
+
+  function systemValueFor(property, row) {
+    if (!property || !row) return null;
+    if (property.type === "unique_id") return uniqueIdForRow(row, property);
+    if (property.type === "created_time" || property.type === "last_edited_time") {
+      return row.cells && row.cells[property.id] != null ? row.cells[property.id] : null;
+    }
+    return null;
+  }
+
+  function normalizeSystemPropertyCells(state) {
+    const errors = [];
+    const properties = Array.isArray(state && state.properties) ? state.properties : [];
+    const rows = Array.isArray(state && state.rows) ? state.rows : [];
+    const timestampProps = properties.filter((p) => p && p.id && (p.type === "created_time" || p.type === "last_edited_time"));
+
+    for (const row of rows) {
+      if (!row || !row.cells || typeof row.cells !== "object" || Array.isArray(row.cells)) continue;
+      for (const property of timestampProps) {
+        const value = row.cells[property.id];
+        if (value == null) continue;
+        if (!isIsoTimestamp(value)) scalarError(errors, "invalid_system_time", row, property, value);
+      }
+    }
+    return errors;
+  }
+
+  function comparableCells(row, systemPropertyIds) {
+    if (!row || !row.cells || typeof row.cells !== "object" || Array.isArray(row.cells)) return "{}";
+    const entries = Object.entries(row.cells)
+      .filter(([key]) => !systemPropertyIds.has(key))
+      .sort(([a], [b]) => a.localeCompare(b));
+    return JSON.stringify(entries);
+  }
+
+  function applySystemMetadata(previousState, nextState, nowIso) {
+    if (!isIsoTimestamp(nowIso)) throw new Error("applySystemMetadata requires an ISO UTC timestamp");
+    const properties = Array.isArray(nextState && nextState.properties) ? nextState.properties : [];
+    const rows = Array.isArray(nextState && nextState.rows) ? nextState.rows : [];
+    const previousRows = new Map((Array.isArray(previousState && previousState.rows) ? previousState.rows : []).filter(Boolean).map((row) => [String(row.id), row]));
+    const systemPropertyIds = new Set(properties.filter((p) => p && p.id && SYSTEM_TYPES.has(p.type)).map((p) => String(p.id)));
+    const createdProps = properties.filter((p) => p && p.id && p.type === "created_time");
+    const editedProps = properties.filter((p) => p && p.id && p.type === "last_edited_time");
+    const touched = [];
+
+    for (const row of rows) {
+      if (!row || !row.id || !row.cells || typeof row.cells !== "object" || Array.isArray(row.cells)) continue;
+      const prior = previousRows.get(String(row.id));
+      const isNew = !prior;
+      const changed = isNew || comparableCells(prior, systemPropertyIds) !== comparableCells(row, systemPropertyIds);
+      if (!changed) continue;
+
+      if (isNew) {
+        for (const property of createdProps) {
+          if (row.cells[property.id] == null) row.cells[property.id] = nowIso;
+        }
+      }
+      for (const property of editedProps) row.cells[property.id] = nowIso;
+      touched.push(String(row.id));
+    }
+    return touched;
+  }
+
   function validateState(state) {
     const errors = [];
     const properties = Array.isArray(state && state.properties) ? state.properties : [];
@@ -206,6 +280,9 @@ window.Daxxer = window.Daxxer || {};
     properties.forEach((p, index) => {
       if (!p || !p.id) errors.push({ code: "property_missing_id", index });
       if (!p || !p.type) errors.push({ code: "property_missing_type", index });
+      if (p && p.type === "unique_id" && p.prefix != null && typeof p.prefix !== "string") {
+        errors.push({ code: "unique_id_invalid_prefix", index });
+      }
     });
     views.forEach((v, index) => {
       if (!v || !v.id) errors.push({ code: "view_missing_id", index });
@@ -225,8 +302,13 @@ window.Daxxer = window.Daxxer || {};
     normalizePage,
     normalizeNumberCells,
     normalizeTypedScalarCells,
+    normalizeSystemPropertyCells,
+    applySystemMetadata,
+    systemValueFor,
+    uniqueIdForRow,
     validateState,
     duplicateIds,
     isIsoDate,
+    isIsoTimestamp,
   };
 })();
