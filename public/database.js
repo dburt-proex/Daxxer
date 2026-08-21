@@ -82,11 +82,11 @@ window.Daxxer = window.Daxxer || {};
       return `<span class="pill ${isStatus ? "status" : ""} pill-${color || "gray"}">${esc(name)}</span>`;
     }
 
-    function closePopovers() { document.querySelectorAll("#optPop,#relationPop").forEach((p) => p.remove()); }
+    function closePopovers() { document.querySelectorAll("#optPop,#relationPop,#placePop").forEach((p) => p.remove()); }
     function positionPopover(pop, anchor, maxHeight = 320) {
       const rect = anchor.getBoundingClientRect();
       pop.style.top = Math.min(rect.bottom + 4, window.innerHeight - maxHeight) + "px";
-      pop.style.left = Math.min(rect.left, window.innerWidth - 280) + "px";
+      pop.style.left = Math.min(rect.left, window.innerWidth - 300) + "px";
     }
 
     function openOptionPicker(anchor, p, row) {
@@ -130,6 +130,52 @@ window.Daxxer = window.Daxxer || {};
       function onDoc(e) { if (!pop.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) { closePopovers(); document.removeEventListener("click", onDoc, true); } }
     }
 
+    function openPlaceEditor(anchor, p, row) {
+      closePopovers();
+      const pop = document.createElement("div"); pop.className = "popover"; pop.id = "placePop";
+      const current = row.cells[p.id];
+      const objectValue = current && typeof current === "object" && !Array.isArray(current) ? current : {};
+      const legacyAddress = typeof current === "string" ? current : "";
+      pop.innerHTML = `<div class="menu-list" style="min-width:280px;padding:8px">
+        <div style="font-weight:650;margin-bottom:7px">Place</div>
+        <input class="emoji-search" data-place="name" placeholder="Name" value="${esc(objectValue.name || "")}" />
+        <input class="emoji-search" data-place="address" placeholder="Address" value="${esc(objectValue.address || legacyAddress)}" style="margin-top:6px" />
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input class="emoji-search" data-place="lat" inputmode="decimal" placeholder="Latitude" value="${esc(objectValue.lat == null ? "" : objectValue.lat)}" />
+          <input class="emoji-search" data-place="long" inputmode="decimal" placeholder="Longitude" value="${esc(objectValue.long == null ? "" : objectValue.long)}" />
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px">
+          <button class="menu-item" data-place-clear style="width:auto">Clear</button>
+          <button class="menu-item" data-place-save style="width:auto;font-weight:650">Save</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-mute);margin-top:6px">Stored locally. No geocoding or network lookup.</div>
+      </div>`;
+      const field = (name) => pop.querySelector(`[data-place="${name}"]`);
+      pop.querySelector("[data-place-save]").onclick = (event) => {
+        event.stopPropagation();
+        const name = field("name").value.trim();
+        const address = field("address").value.trim();
+        const latText = field("lat").value.trim();
+        const longText = field("long").value.trim();
+        if (!name && !address && !latText && !longText) row.cells[p.id] = null;
+        else {
+          const next = {};
+          if (name) next.name = name;
+          if (address) next.address = address;
+          if (latText || longText) {
+            next.lat = latText === "" ? null : Number(latText);
+            next.long = longText === "" ? null : Number(longText);
+          }
+          row.cells[p.id] = next;
+        }
+        saveNow(); closePopovers(); rerender();
+      };
+      pop.querySelector("[data-place-clear]").onclick = (event) => { event.stopPropagation(); row.cells[p.id] = null; saveNow(); closePopovers(); rerender(); };
+      document.body.appendChild(pop); positionPopover(pop, anchor, 390); field("name").focus();
+      setTimeout(() => document.addEventListener("click", onDoc, true), 0);
+      function onDoc(e) { if (!pop.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) { closePopovers(); document.removeEventListener("click", onDoc, true); } }
+    }
+
     function renderCell(p, row) {
       const v = row.cells[p.id];
       if (p.type === "title") return `<div class="cell-title-link"><span>${I().page}</span><span class="ct-text" contenteditable="true" data-edit="title">${esc(v || "")}</span><button class="open-page" data-open="${row.id}">${I().database}Open</button></div>`;
@@ -137,6 +183,12 @@ window.Daxxer = window.Daxxer || {};
       if (p.type === "select" || p.type === "status") return v ? pill(Daxxer.optName(p, v), Daxxer.optColor(p, v), p.type === "status") : `<span style="color:var(--text-mute)">＋</span>`;
       if (p.type === "multi_select") { const arr = Array.isArray(v) ? v : []; return arr.length ? `<div class="db-cell-tags">${arr.map((id) => pill(Daxxer.optName(p, id), Daxxer.optColor(p, id))).join("")}</div>` : `<span style="color:var(--text-mute)">＋</span>`; }
       if (p.type === "relation") { const related = Daxxer.DatabaseModel && Daxxer.DatabaseModel.relationRows ? Daxxer.DatabaseModel.relationRows(state, p, row) : []; return related.length ? `<div class="db-cell-tags">${related.map((target) => pill(rowTitle(target), "gray")).join("")}</div>` : `<span style="color:var(--text-mute)">＋ Add page</span>`; }
+      if (p.type === "place") { const label = Daxxer.DatabaseModel ? Daxxer.DatabaseModel.placeLabel(v) : String(v || ""); return `<span data-place-value="1" style="color:${label === "Invalid place" ? "var(--tag-red)" : "var(--text-dim)"}">${esc(label || "＋ Add place")}</span>`; }
+      if (p.type === "button") {
+        const config = Daxxer.DatabaseModel ? Daxxer.DatabaseModel.buttonActionResult(state, p) : { ok: false, error: { message: "Button model unavailable." } };
+        const label = p.label || "Run";
+        return `<button data-db-button="1" ${config.ok ? "" : "disabled"} title="${esc(config.ok ? "Toggle the configured checkbox on this row" : config.error.message)}" style="border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);padding:3px 9px;cursor:${config.ok ? "pointer" : "not-allowed"};font:inherit">${esc(config.ok ? label : "⚠ Button")}</button>`;
+      }
       if (DERIVED_TYPES.has(p.type)) {
         const display = displayDerived(derivedResult(p, row), p.type === "formula" ? "Formula" : "Rollup");
         return `<span data-derived="${p.type}" title="${esc(display.title)}" style="color:${display.error ? "var(--tag-red)" : "var(--text-dim)"};font-size:12px">${esc(display.text)}</span>`;
@@ -148,6 +200,16 @@ window.Daxxer = window.Daxxer || {};
     function wireCell(cell, p, row) {
       if (SYSTEM_TYPES.has(p.type) || DERIVED_TYPES.has(p.type)) return;
       if (p.type === "relation") cell.onclick = () => openRelationPicker(cell, p, row);
+      else if (p.type === "place") cell.onclick = () => openPlaceEditor(cell, p, row);
+      else if (p.type === "button") {
+        const button = cell.querySelector("[data-db-button]");
+        if (button && !button.disabled) button.onclick = (event) => {
+          event.stopPropagation();
+          const result = Daxxer.DatabaseModel.applyButtonAction(state, p, row);
+          if (!result.ok) return;
+          saveNow(); rerender();
+        };
+      }
       else if (p.type === "select" || p.type === "status" || p.type === "multi_select") cell.onclick = () => openOptionPicker(cell, p, row);
       else if (p.type === "checkbox") { const box = cell.querySelector(".db-check"); if (box) box.onclick = () => { row.cells[p.id] = !row.cells[p.id]; saveNow(); rerender(); }; }
       else {
@@ -178,7 +240,7 @@ window.Daxxer = window.Daxxer || {};
 
     function addProperty() {
       const name = prompt("Property name:", "New property"); if (!name) return;
-      const type = (prompt("Type: text, select, status, multi_select, checkbox, number, date, date_range, url, email, phone, relation, formula, rollup, unique_id, created_time, last_edited_time", "select") || "select").trim();
+      const type = (prompt("Type: text, select, status, multi_select, checkbox, number, date, date_range, url, email, phone, place, relation, formula, rollup, button, unique_id, created_time, last_edited_time", "select") || "select").trim();
       const p = { id: uid("p"), name, type };
       if (["select", "status", "multi_select"].includes(type)) p.options = [];
       if (type === "relation") p.target = "self";
@@ -189,12 +251,17 @@ window.Daxxer = window.Daxxer || {};
         p.property = prompt("Property to roll up (name or ID):", titleProp().id) || titleProp().id;
         p.aggregation = (prompt("Aggregation: count, sum, average, min, max, unique, earliest, latest", "count") || "count").trim();
       }
+      if (type === "button") {
+        const boxes = state.properties.filter((candidate) => candidate.type === "checkbox");
+        p.label = prompt("Button label:", "Toggle") || "Toggle";
+        p.action = { type: "toggle_checkbox", property: prompt(`Checkbox property (name or ID): ${boxes.map((candidate) => candidate.name).join(", ")}`, boxes[0] ? boxes[0].id : "") || "" };
+      }
       if (type === "unique_id") p.prefix = (prompt("Unique ID prefix:", "ID-") || "ID-");
       state.properties.push(p); saveNow(); rerender();
     }
 
     function typeIcon(t) {
-      const map = { title: I().text, text: I().text, select: I().bullet, status: I().toggle, multi_select: I().bullet, checkbox: I().todo, number: I().numbered, date: I().database, date_range: I().database, url: I().text, email: I().text, phone: I().text, relation: I().database, formula: I().numbered, rollup: I().numbered, unique_id: I().numbered, created_time: I().database, last_edited_time: I().database };
+      const map = { title: I().text, text: I().text, select: I().bullet, status: I().toggle, multi_select: I().bullet, checkbox: I().todo, number: I().numbered, date: I().database, date_range: I().database, url: I().text, email: I().text, phone: I().text, place: I().database, relation: I().database, formula: I().numbered, rollup: I().numbered, button: I().toggle, unique_id: I().numbered, created_time: I().database, last_edited_time: I().database };
       return `<span style="display:inline-flex">${map[t] || I().text}</span>`;
     }
 
