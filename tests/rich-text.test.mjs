@@ -46,6 +46,34 @@ test("toggle mark affects only the selected range", () => {
   assert.equal(unmarked.segments[0].text, "abcdef");
 });
 
+test("text and background styles affect only the selected range and can be cleared", () => {
+  const sourceSegments = RT.fromText("abcdef");
+  const colored = RT.applyStyle(sourceSegments, 1, 5, "color", "#8b1e2d");
+  assert.equal(colored.ok, true);
+  assert.equal(colored.segments[1].text, "bcde");
+  assert.equal(colored.segments[1].marks.color, "#8b1e2d");
+
+  const highlighted = RT.applyStyle(colored.segments, 2, 4, "background", "#eee7dc");
+  assert.equal(highlighted.ok, true);
+  assert.equal(RT.plainText(highlighted.segments), "abcdef");
+  assert.equal(highlighted.segments.some((segment) => segment.marks.background === "#eee7dc"), true);
+
+  const cleared = RT.applyStyle(highlighted.segments, 1, 5, "color", null);
+  assert.equal(cleared.ok, true);
+  assert.equal(cleared.segments.some((segment) => segment.marks.color), false);
+});
+
+test("unsupported style marks and non-string style values fail without mutation", () => {
+  const unsupported = RT.applyStyle(rich, 0, 5, "fontSize", "72px");
+  assert.equal(unsupported.ok, false);
+  assert.equal(unsupported.error, "unsupported_style_mark");
+  assert.equal(RT.plainText(unsupported.segments), "Hello world");
+
+  const invalid = RT.applyStyle(rich, 0, 5, "color", { unsafe: true });
+  assert.equal(invalid.ok, false);
+  assert.equal(invalid.error, "invalid_style_value");
+});
+
 test("links preserve existing marks and can be removed", () => {
   const linked = RT.applyLink(rich, 0, 5, "https://example.com");
   assert.equal(linked.ok, true);
