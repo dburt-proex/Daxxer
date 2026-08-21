@@ -1,4 +1,4 @@
-// Daxxer block editor. Plain-text blocks with types, slash menu, markdown
+// Daxxer block editor: versioned rich-text blocks, slash menu, markdown
 // shortcuts, checkboxes, toggles, callouts, code, and drag-to-reorder.
 window.Daxxer = window.Daxxer || {};
 
@@ -7,18 +7,63 @@ window.Daxxer = window.Daxxer || {};
   const uid = () => "b_" + Math.random().toString(36).slice(2, 9);
 
   function Editor(container, page, opts = {}) {
-    let blocks = structuredClone(page.blocks || []);
-    if (blocks.length === 0) blocks = [{ id: uid(), type: "paragraph", text: "" }];
+    const Schema = Daxxer.BlockSchema;
+    const RT = Daxxer.RichText;
+    const migration = Schema ? Schema.migratePage(page) : { ok: true, page: structuredClone(page || {}), errors: [], warnings: [] };
+
+    if (!migration.ok || !RT) {
+      container.innerHTML = "";
+      const panel = document.createElement("div");
+      panel.className = "editor-schema-error";
+      panel.style.cssText = "margin:16px 0;padding:14px 16px;border:1px solid rgba(235,87,87,.35);border-radius:8px;background:rgba(235,87,87,.06);font-size:13px;line-height:1.5";
+      panel.innerHTML = `<strong>Page content needs review</strong><div style="margin-top:4px;color:var(--text-dim)">${!RT ? "Rich-text engine is unavailable." : migration.errors.map((error) => error.code).join(" · ")}</div><div style="margin-top:5px;color:var(--text-mute)">Daxxer stopped editing rather than rewriting unsupported content.</div>`;
+      container.appendChild(panel);
+      return { getBlocks: () => structuredClone((page && page.blocks) || []), errors: migration.errors || [{ code: "rich_text_engine_missing" }] };
+    }
+
+    let blocks = structuredClone(migration.page.blocks || []);
+    if (blocks.length === 0) blocks = [newBlock("paragraph", "")];
     let saveTimer = null;
     let pendingFocus = null; // { id, pos }
 
+    function newBlock(type = "paragraph", text = "") {
+      return { id: uid(), type, schemaVersion: 1, text, richText: RT.fromText(text) };
+    }
+
+    function segmentsFor(block) {
+      return Array.isArray(block.richText) ? RT.compact(block.richText) : RT.fromText(block.text || "");
+    }
+
+    function syncBlock(block, segments) {
+      block.richText = RT.compact(segments);
+      block.text = RT.plainText(block.richText);
+      block.schemaVersion = 1;
+      return block.richText;
+    }
+
+    function showSaveError(errors) {
+      let banner = container.querySelector(".editor-save-error");
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.className = "editor-save-error";
+        banner.style.cssText = "position:sticky;top:4px;z-index:20;margin:4px 0 8px;padding:8px 10px;border-radius:6px;background:rgba(235,87,87,.10);color:var(--text);font-size:12px";
+        container.prepend(banner);
+      }
+      banner.textContent = `Save blocked: ${(errors || []).map((error) => error.code).join(" · ") || "invalid content"}`;
+    }
+
     function save() {
       clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => opts.onChange && opts.onChange(blocks), 450);
+      saveTimer = setTimeout(() => {
+        const prepared = Schema ? Schema.prepareForPersistence({ blocks }) : { ok: true, page: { blocks } };
+        if (!prepared.ok) { showSaveError(prepared.errors); return; }
+        blocks = prepared.page.blocks;
+        const banner = container.querySelector(".editor-save-error"); if (banner) banner.remove();
+        if (opts.onChange) opts.onChange(blocks);
+      }, 450);
     }
 
     // ---------- block-array helpers (supports nesting via toggle.children) ----------
-    // Find a block + its containing array + index, searching recursively.
     function locate(id, arr = blocks, parent = null) {
       for (let i = 0; i < arr.length; i++) {
         if (arr[i].id === id) return { block: arr[i], arr, index: i, parent };
@@ -30,32 +75,138 @@ window.Daxxer = window.Daxxer || {};
       return null;
     }
 
-    // ---------- caret helpers ----------
-    function caretOffset(el) {
+    // ---------- selection/caret helpers ----------
+    function selectionOffsets(el) {
       const sel = window.getSelection();
-      if (!sel.rangeCount) return 0;
+      if (!sel.rangeCount) return { start: 0, end: 0 };
       const range = sel.getRangeAt(0);
-      const pre = range.cloneRange();
-      pre.selectNodeContents(el);
-      pre.setEnd(range.endContainer, range.endOffset);
-      return pre.toString().length;
+      if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) return { start: 0, end: 0 };
+      const beforeStart = range.cloneRange();
+      beforeStart.selectNodeContents(el);
+      beforeStart.setEnd(range.startContainer, range.startOffset);
+      const beforeEnd = range.cloneRange();
+      beforeEnd.selectNodeContents(el);
+      beforeEnd.setEnd(range.endContainer, range.endOffset);
+      return { start: beforeStart.toString().length, end: beforeEnd.toString().length };
     }
-    function setCaret(el, pos) {
+
+    function caretOffset(el) { return selectionOffsets(el).end; }
+
+    function pointAtOffset(el, wanted) {
+      const target = Math.max(0, Math.min(Number(wanted) || 0, el.textContent.length));
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let offset = 0;
+      let node;
+      let last = null;
+      while ((node = walker.nextNode())) {
+        last = node;
+        const next = offset + node.nodeValue.length;
+        if (target <= next) return { node, offset: target - offset };
+        offset = next;
+      }
+      if (last) return { node: last, offset: last.nodeValue.length };
+      return { node: el, offset: 0 };
+    }
+
+    function setSelection(el, start, end = start) {
       el.focus();
       const sel = window.getSelection();
       const range = document.createRange();
-      const node = el.firstChild || el;
-      const len = el.textContent.length;
-      let offset = pos === "start" ? 0 : pos === "end" ? len : Math.min(pos, len);
-      if (el.firstChild) range.setStart(el.firstChild, offset);
-      else range.setStart(el, 0);
-      range.collapse(true);
+      const a = pointAtOffset(el, start === "start" ? 0 : start === "end" ? el.textContent.length : start);
+      const b = pointAtOffset(el, end === "start" ? 0 : end === "end" ? el.textContent.length : end);
+      range.setStart(a.node, a.offset);
+      range.setEnd(b.node, b.offset);
       sel.removeAllRanges();
       sel.addRange(range);
     }
+
+    function setCaret(el, pos) {
+      const len = el.textContent.length;
+      const offset = pos === "start" ? 0 : pos === "end" ? len : Math.min(Number(pos) || 0, len);
+      setSelection(el, offset, offset);
+    }
+
     function focusBlock(id, pos) {
       const el = container.querySelector(`[data-id="${id}"] .editable`);
       if (el) setCaret(el, pos === undefined ? "end" : pos);
+    }
+
+    // ---------- rich text DOM projection ----------
+    function renderRichText(ed, segments) {
+      ed.innerHTML = "";
+      for (const segment of RT.compact(segments)) {
+        const span = document.createElement("span");
+        span.dataset.rt = "1";
+        if (segment.marks && segment.marks.bold) { span.dataset.bold = "1"; span.style.fontWeight = "700"; }
+        if (segment.marks && segment.marks.italic) { span.dataset.italic = "1"; span.style.fontStyle = "italic"; }
+        if (segment.marks && segment.marks.underline) { span.dataset.underline = "1"; span.style.textDecoration = "underline"; }
+        if (segment.marks && segment.marks.strike) { span.dataset.strike = "1"; span.style.textDecoration = span.style.textDecoration ? span.style.textDecoration + " line-through" : "line-through"; }
+        if (segment.marks && segment.marks.code) {
+          span.dataset.code = "1";
+          span.style.fontFamily = "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
+          span.style.fontSize = ".9em";
+          span.style.background = "var(--hover)";
+          span.style.borderRadius = "4px";
+          span.style.padding = "1px 3px";
+        }
+        if (segment.marks && segment.marks.color) { span.dataset.color = segment.marks.color; span.style.color = segment.marks.color; }
+        if (segment.marks && segment.marks.background) { span.dataset.background = segment.marks.background; span.style.backgroundColor = segment.marks.background; }
+        if (segment.href) { span.dataset.href = segment.href; span.style.textDecoration = span.style.textDecoration ? span.style.textDecoration + " underline" : "underline"; span.style.cursor = "text"; span.title = segment.href; }
+        span.textContent = segment.text;
+        ed.appendChild(span);
+      }
+    }
+
+    function segmentsFromEditable(ed) {
+      const out = [];
+      function walk(node, inherited) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          if (node.nodeValue) out.push({ text: node.nodeValue, marks: { ...(inherited.marks || {}) }, href: inherited.href || null });
+          return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        if (node.tagName === "BR") { out.push({ text: "\n", marks: { ...(inherited.marks || {}) }, href: inherited.href || null }); return; }
+        const marks = { ...(inherited.marks || {}) };
+        const d = node.dataset || {};
+        if (d.bold === "1") marks.bold = true;
+        if (d.italic === "1") marks.italic = true;
+        if (d.underline === "1") marks.underline = true;
+        if (d.strike === "1") marks.strike = true;
+        if (d.code === "1") marks.code = true;
+        if (d.color) marks.color = d.color;
+        if (d.background) marks.background = d.background;
+        const href = d.href || inherited.href || null;
+        node.childNodes.forEach((child) => walk(child, { marks, href }));
+      }
+      ed.childNodes.forEach((child) => walk(child, { marks: {}, href: null }));
+      return RT.compact(out);
+    }
+
+    function syncFromEditable(ed, block) { return syncBlock(block, segmentsFromEditable(ed)); }
+
+    function applyFormatting(ed, block, kind) {
+      syncFromEditable(ed, block);
+      const { start, end } = selectionOffsets(ed);
+      if (end <= start) return false;
+      let result;
+      if (kind === "link") {
+        const current = RT.slice(block.richText, start, end);
+        const existing = current.find((segment) => segment.href)?.href || "";
+        const href = prompt("Link URL (leave blank to remove):", existing);
+        if (href === null) return false;
+        const trimmed = href.trim();
+        if (trimmed && !/^(https?:\/\/|mailto:)/i.test(trimmed)) {
+          alert("Use an http://, https://, or mailto: link.");
+          return false;
+        }
+        result = RT.applyLink(block.richText, start, end, trimmed || null);
+      } else result = RT.toggleMark(block.richText, start, end, kind);
+      if (!result || !result.ok) return false;
+      syncBlock(block, result.segments);
+      renderRichText(ed, block.richText);
+      setSelection(ed, start, end);
+      save();
+      return true;
     }
 
     // ---------- rendering ----------
@@ -74,7 +225,7 @@ window.Daxxer = window.Daxxer || {};
       ed.contentEditable = "true";
       ed.spellcheck = true;
       ed.dataset.placeholder = placeholder || "";
-      ed.textContent = block.text || "";
+      renderRichText(ed, segmentsFor(block));
       bindEditable(ed, block);
       return ed;
     }
@@ -88,7 +239,6 @@ window.Daxxer = window.Daxxer || {};
       if (block.type === "toggle" && block.open !== false) el.classList.add("open");
       if (block.type === "callout") el.classList.add("callout-" + (block.color || "blue"));
 
-      // gutter (add + drag)
       const gutter = document.createElement("div");
       gutter.className = "block-gutter";
       const addBtn = document.createElement("button");
@@ -130,8 +280,7 @@ window.Daxxer = window.Daxxer || {};
       } else if (block.type === "code") {
         const lang = document.createElement("div");
         lang.className = "code-lang"; lang.textContent = block.lang || "code";
-        const ed = makeEditable(block, "");
-        content.append(lang, ed);
+        content.append(lang, makeEditable(block, ""));
       } else if (block.type === "toggle") {
         const head = document.createElement("div"); head.className = "toggle-head";
         const arrow = document.createElement("div"); arrow.className = "toggle-arrow"; arrow.innerHTML = I().chevron;
@@ -141,9 +290,6 @@ window.Daxxer = window.Daxxer || {};
         const kids = document.createElement("div"); kids.className = "toggle-children";
         block.children = block.children || [];
         block.children.forEach((cb, ci) => kids.appendChild(renderBlock(cb, block.children, ci)));
-        const addKid = document.createElement("div");
-        addKid.className = "editable"; addKid.style.color = "var(--text-mute)"; addKid.style.fontSize = "14px";
-        addKid.style.cursor = "text"; addKid.textContent = "";
         content.appendChild(kids);
       } else {
         const ph = block.type === "heading1" ? "Heading 1" : block.type === "heading2" ? "Heading 2"
@@ -168,7 +314,7 @@ window.Daxxer = window.Daxxer || {};
     function insertAfter(id, type, focusNew, openSlash) {
       const loc = locate(id);
       if (!loc) return;
-      const nb = { id: uid(), type: type || "paragraph", text: "" };
+      const nb = newBlock(type || "paragraph", "");
       loc.arr.splice(loc.index + 1, 0, nb);
       pendingFocus = { id: nb.id, pos: "start" };
       save(); render();
@@ -180,25 +326,25 @@ window.Daxxer = window.Daxxer || {};
       if (type === "todo") block.checked = false;
       if (type === "toggle") { block.open = true; block.children = block.children || []; }
       if (type === "callout") block.color = block.color || "blue";
-      if (type === "divider") { block.text = ""; }
+      if (type === "divider") syncBlock(block, []);
       pendingFocus = { id: block.id, pos: "end" };
       save(); render();
       if (type === "divider") insertAfter(block.id, "paragraph", true);
     }
 
-    // markdown block shortcuts, checked when space is pressed at line start
     const MARKERS = {
       "#": "heading1", "##": "heading2", "###": "heading3",
       "-": "bulleted", "*": "bulleted", "1.": "numbered",
       "[]": "todo", "[ ]": "todo", ">": "quote", '"': "quote", "```": "code",
     };
+
     function tryMarker(block, el) {
-      const text = el.textContent;
+      syncFromEditable(el, block);
       const off = caretOffset(el);
-      const before = text.slice(0, off);
+      const before = block.text.slice(0, off);
       if (MARKERS[before]) {
         block.type = MARKERS[before];
-        block.text = text.slice(off);
+        syncBlock(block, RT.slice(block.richText, off, RT.length(block.richText)));
         if (block.type === "todo") block.checked = false;
         pendingFocus = { id: block.id, pos: "start" };
         save(); render();
@@ -209,19 +355,30 @@ window.Daxxer = window.Daxxer || {};
 
     function bindEditable(ed, block) {
       ed.addEventListener("input", () => {
-        block.text = ed.textContent;
+        syncFromEditable(ed, block);
         save();
       });
 
       ed.addEventListener("keydown", (e) => {
-        const off = caretOffset(ed);
-        const atStart = off === 0;
-        const atEnd = off === ed.textContent.length;
+        const selection = selectionOffsets(ed);
+        const off = selection.end;
+        const atStart = selection.start === 0 && selection.end === 0;
+        const atEnd = selection.start === ed.textContent.length && selection.end === ed.textContent.length;
+        const mod = e.ctrlKey || e.metaKey;
 
-        // slash menu
-        if (e.key === "/") {
-          setTimeout(() => openSlashMenu(ed, block), 0);
+        if (mod && !e.altKey) {
+          const key = e.key.toLowerCase();
+          let mark = null;
+          if (key === "b" && !e.shiftKey) mark = "bold";
+          else if (key === "i" && !e.shiftKey) mark = "italic";
+          else if (key === "u" && !e.shiftKey) mark = "underline";
+          else if (key === "x" && e.shiftKey) mark = "strike";
+          else if (e.key === "`") mark = "code";
+          if (mark) { e.preventDefault(); applyFormatting(ed, block, mark); return; }
+          if (key === "k" && !e.shiftKey) { e.preventDefault(); applyFormatting(ed, block, "link"); return; }
         }
+
+        if (e.key === "/") setTimeout(() => openSlashMenu(ed, block), 0);
 
         if (e.key === " ") {
           if (tryMarker(block, ed)) { e.preventDefault(); return; }
@@ -231,18 +388,22 @@ window.Daxxer = window.Daxxer || {};
           e.preventDefault();
           const loc = locate(block.id);
           if (!loc) return;
-          // empty list/todo/quote → exit to paragraph
-          if (["bulleted", "numbered", "todo", "quote"].includes(block.type) && ed.textContent === "") {
+          syncFromEditable(ed, block);
+          let { start, end } = selectionOffsets(ed);
+          if (end > start) {
+            syncBlock(block, RT.replaceRange(block.richText, start, end, ""));
+            end = start;
+          }
+          if (["bulleted", "numbered", "todo", "quote"].includes(block.type) && block.text === "") {
             block.type = "paragraph"; block.checked = undefined;
             pendingFocus = { id: block.id, pos: "start" }; save(); render(); return;
           }
-          const text = ed.textContent;
-          const before = text.slice(0, off);
-          const after = text.slice(off);
-          block.text = before;
+          const [before, after] = RT.split(block.richText, start);
+          syncBlock(block, before);
           let newType = "paragraph";
           if (["bulleted", "numbered", "todo"].includes(block.type)) newType = block.type;
-          const nb = { id: uid(), type: newType, text: after };
+          const nb = newBlock(newType, "");
+          syncBlock(nb, after);
           if (newType === "todo") nb.checked = false;
           loc.arr.splice(loc.index + 1, 0, nb);
           pendingFocus = { id: nb.id, pos: "start" };
@@ -251,21 +412,20 @@ window.Daxxer = window.Daxxer || {};
         }
 
         if (e.key === "Backspace" && atStart) {
-          // convert formatted block back to paragraph first
+          syncFromEditable(ed, block);
           if (block.type !== "paragraph" && block.type !== "code") {
             e.preventDefault();
             block.type = "paragraph"; block.checked = undefined; block.color = undefined;
             pendingFocus = { id: block.id, pos: "start" }; save(); render();
             return;
           }
-          // merge into previous sibling
           const loc = locate(block.id);
           if (loc && loc.index > 0) {
             e.preventDefault();
             const prev = loc.arr[loc.index - 1];
             if (prev.type === "divider") { loc.arr.splice(loc.index - 1, 1); save(); render(); pendingFocus = { id: block.id, pos: "start" }; render(); return; }
-            const mergePos = prev.text.length;
-            prev.text = prev.text + block.text;
+            const mergePos = RT.length(segmentsFor(prev));
+            syncBlock(prev, RT.concat(segmentsFor(prev), segmentsFor(block)));
             loc.arr.splice(loc.index, 1);
             pendingFocus = { id: prev.id, pos: mergePos };
             save(); render();
@@ -289,8 +449,14 @@ window.Daxxer = window.Daxxer || {};
 
       ed.addEventListener("paste", (e) => {
         e.preventDefault();
+        syncFromEditable(ed, block);
         const text = (e.clipboardData || window.clipboardData).getData("text/plain");
-        document.execCommand("insertText", false, text);
+        const { start, end } = selectionOffsets(ed);
+        const style = RT.styleAt(block.richText, start);
+        syncBlock(block, RT.replaceRange(block.richText, start, end, text, style));
+        renderRichText(ed, block.richText);
+        setCaret(ed, start + text.length);
+        save();
       });
     }
 
@@ -319,8 +485,7 @@ window.Daxxer = window.Daxxer || {};
         if (!list.length) html += '<div class="s-hint">No matching blocks</div>';
         html += "</div>";
         menu.innerHTML = html;
-        menu.querySelectorAll(".slash-item").forEach((it, i) =>
-          (it.onclick = () => choose(it.dataset.type)));
+        menu.querySelectorAll(".slash-item").forEach((it) => (it.onclick = () => choose(it.dataset.type)));
       }
       function place() {
         menu.hidden = false;
@@ -328,20 +493,19 @@ window.Daxxer = window.Daxxer || {};
         menu.style.left = rect.left + "px";
       }
       function choose(type) {
-        // strip the "/filter" the user typed
-        const txt = ed.textContent;
-        const si = txt.lastIndexOf("/");
-        if (si >= 0) { block.text = txt.slice(0, si); }
+        syncFromEditable(ed, block);
+        const si = block.text.lastIndexOf("/");
+        if (si >= 0) syncBlock(block, RT.slice(block.richText, 0, si));
         close();
         convertTypeInline(block, type);
       }
-      function convertTypeInline(block, type) {
-        if (type === "divider") { block.type = "paragraph"; convertType(block, "divider"); return; }
-        block.type = type;
-        if (type === "todo") block.checked = false;
-        if (type === "toggle") { block.open = true; block.children = block.children || []; }
-        if (type === "callout") block.color = block.color || "blue";
-        pendingFocus = { id: block.id, pos: "end" };
+      function convertTypeInline(target, type) {
+        if (type === "divider") { target.type = "paragraph"; convertType(target, "divider"); return; }
+        target.type = type;
+        if (type === "todo") target.checked = false;
+        if (type === "toggle") { target.open = true; target.children = target.children || []; }
+        if (type === "callout") target.color = target.color || "blue";
+        pendingFocus = { id: target.id, pos: "end" };
         save(); render();
       }
       function onKey(e) {
@@ -396,7 +560,7 @@ window.Daxxer = window.Daxxer || {};
       menu.querySelectorAll("[data-act]").forEach((it) => (it.onclick = () => {
         const act = it.dataset.act;
         const loc = locate(block.id);
-        if (act === "del" && loc) { loc.arr.splice(loc.index, 1); if (!blocks.length) blocks.push({ id: uid(), type: "paragraph", text: "" }); }
+        if (act === "del" && loc) { loc.arr.splice(loc.index, 1); if (!blocks.length) blocks.push(newBlock("paragraph", "")); }
         else if (act === "dup" && loc) { loc.arr.splice(loc.index + 1, 0, { ...structuredClone(block), id: uid() }); }
         else if (act === "turn-todo") { block.type = "todo"; block.checked = false; }
         else if (act === "turn-h2") { block.type = "heading2"; }
@@ -407,7 +571,7 @@ window.Daxxer = window.Daxxer || {};
       setTimeout(() => document.addEventListener("click", onDoc, true), 0);
     }
 
-    // ---------- drag to reorder (top level) ----------
+    // ---------- drag to reorder ----------
     let dragId = null;
     function wireDrag(el, handle, block) {
       handle.setAttribute("draggable", "true");
@@ -434,15 +598,15 @@ window.Daxxer = window.Daxxer || {};
         const to = locate(block.id);
         if (!from || !to) return;
         const [moved] = from.arr.splice(from.index, 1);
-        const toNow = locate(block.id); // recompute after splice
-        let idx = toNow.index + (after ? 1 : 0);
+        const toNow = locate(block.id);
+        const idx = toNow.index + (after ? 1 : 0);
         toNow.arr.splice(idx, 0, moved);
         dragId = null; save(); render();
       });
     }
 
     render();
-    return { getBlocks: () => blocks };
+    return { getBlocks: () => blocks, warnings: migration.warnings || [] };
   }
 
   Daxxer.Editor = { mount: (container, page, opts) => Editor(container, page, opts) };
