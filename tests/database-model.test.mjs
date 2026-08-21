@@ -130,6 +130,76 @@ test("url email and phone normalization trims valid scalar values and flags malf
   assert.equal(state.rows[1].cells.phone, "call-me");
 });
 
+test("place values preserve legacy strings and normalize valid structured local places", () => {
+  const state = {
+    properties: [{ id: "name", type: "title" }, { id: "where", type: "place" }],
+    rows: [
+      { id: "legacy", cells: { where: "123 Main St, Rochester, MN" } },
+      { id: "structured", cells: { where: { name: " Shop ", address: " 12 1st Ave ", lat: 44.0123, long: -92.4802 } } },
+      { id: "blank", cells: { where: "   " } },
+    ],
+  };
+  const errors = Model.normalizePlaceCells(state);
+  assert.equal(errors.length, 0);
+  assert.equal(state.rows[0].cells.where, "123 Main St, Rochester, MN");
+  assert.equal(state.rows[1].cells.where.name, "Shop");
+  assert.equal(state.rows[1].cells.where.address, "12 1st Ave");
+  assert.equal(state.rows[1].cells.where.lat, 44.0123);
+  assert.equal(state.rows[1].cells.where.long, -92.4802);
+  assert.equal(Model.placeLabel(state.rows[1].cells.where), "Shop");
+  assert.equal(state.rows[2].cells.where, null);
+});
+
+test("invalid place coordinates fail visibly without overwriting legacy value", () => {
+  const partial = { name: "Somewhere", lat: 44.0 };
+  const outOfRange = { lat: 95, long: -92 };
+  const state = {
+    properties: [{ id: "name", type: "title" }, { id: "where", type: "place" }],
+    rows: [
+      { id: "partial", cells: { where: partial } },
+      { id: "range", cells: { where: outOfRange } },
+    ],
+  };
+  const errors = Model.normalizePlaceCells(state);
+  assert.equal(errors.length, 2);
+  assert.equal(errors.every((error) => error.code === "invalid_place"), true);
+  assert.equal(state.rows[0].cells.where, partial);
+  assert.equal(state.rows[1].cells.where, outOfRange);
+});
+
+test("bounded button toggles only its configured checkbox", () => {
+  const button = { id: "act", type: "button", action: { type: "toggle_checkbox", property: "done" } };
+  const state = {
+    properties: [{ id: "name", type: "title" }, { id: "done", name: "Done", type: "checkbox" }, button],
+    rows: [{ id: "r1", cells: { name: "Task", done: false, untouched: "keep" } }],
+  };
+  const config = Model.buttonActionResult(state, button);
+  assert.equal(config.ok, true);
+  assert.equal(config.target.id, "done");
+  const first = Model.applyButtonAction(state, button, state.rows[0]);
+  assert.equal(first.ok, true);
+  assert.equal(state.rows[0].cells.done, true);
+  assert.equal(state.rows[0].cells.untouched, "keep");
+  Model.applyButtonAction(state, button, state.rows[0]);
+  assert.equal(state.rows[0].cells.done, false);
+});
+
+test("button rejects non-checkbox and unsupported actions without mutation", () => {
+  const state = {
+    properties: [{ id: "name", type: "title" }, { id: "text", type: "text" }],
+    rows: [{ id: "r1", cells: { text: "keep" } }],
+  };
+  const wrongTarget = { id: "b1", type: "button", action: { type: "toggle_checkbox", property: "text" } };
+  const unsupported = { id: "b2", type: "button", action: { type: "open_url", url: "https://example.com" } };
+  const targetResult = Model.applyButtonAction(state, wrongTarget, state.rows[0]);
+  const unsupportedResult = Model.applyButtonAction(state, unsupported, state.rows[0]);
+  assert.equal(targetResult.ok, false);
+  assert.equal(targetResult.error.code, "button_target");
+  assert.equal(unsupportedResult.ok, false);
+  assert.equal(unsupportedResult.error.code, "button_action_unsupported");
+  assert.equal(state.rows[0].cells.text, "keep");
+});
+
 test("unique IDs are deterministic projections of stable row IDs", () => {
   const row = { id: "r_alpha", cells: {} };
   assert.equal(Model.uniqueIdForRow(row, { type: "unique_id" }), "ID-r_alpha");
