@@ -1,0 +1,79 @@
+.simple-table-block {
+  width: 100%;
+  margin: 6px 0 10px;
+}
+
+.simple-table-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  margin-bottom: 5px;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+
+.block[data-type="table"]:hover .simple-table-controls,
+.simple-table-block:focus-within .simple-table-controls { opacity: 1; }
+
+.simple-table-controls button {
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.simple-table-controls button:hover,
+.simple-table-controls button[aria-pressed="true"] { background: var(--hover); color: var(--text); }
+
+.simple-table-scroll { width: 100%; overflow-x: auto; }
+
+.simple-table {
+  width: 100%;
+  min-width: 360px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: var(--bg);
+}
+
+.simple-table td,
+.simple-table th {
+  min-width: 110px;
+  padding: 0;
+  border: 1px solid var(--border-2, var(--border));
+  vertical-align: top;
+  text-align: left;
+  font-weight: 400;
+}
+
+.simple-table th,
+.simple-table td.is-header-column { background: var(--sidebar); font-weight: 600; }
+
+.simple-table-cell-editor {
+  min-height: 31px;
+  padding: 6px 8px;
+  outline: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+
+.simple-table-cell-editor:focus {
+  box-shadow: inset 0 0 0 2px rgba(35, 131, 226, .32);
+  background: var(--bg);
+}
+
+.simple-table-error {
+  padding: 10px 12px;
+  border: 1px solid var(--tag-red-bg);
+  border-radius: 7px;
+  background: var(--tag-red-bg);
+  color: var(--tag-red-fg, var(--text));
+  font-size: 12.5px;
+}
