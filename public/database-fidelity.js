@@ -43,6 +43,8 @@ window.Daxxer = window.Daxxer || {};
       invalid_email: "Enter a valid email address.",
       invalid_phone: "Enter a phone value containing at least three digits and standard phone punctuation.",
       invalid_system_time: "System-owned timestamps must be canonical UTC ISO timestamps.",
+      invalid_relation: "Relations must contain a unique array of stable row IDs.",
+      dangling_relation: `Related row ${error.targetId || ""} no longer exists.`,
     };
     return `${messages[error.code] || "Enter a valid value."} Current value: ${errorValue(error.value)}`;
   }
@@ -65,6 +67,7 @@ window.Daxxer = window.Daxxer || {};
     return [
       ...Model.normalizeNumberCells(state),
       ...Model.normalizeTypedScalarCells(state),
+      ...Model.normalizeRelationCells(state),
       ...Model.normalizeSystemPropertyCells(state),
     ];
   }
@@ -241,8 +244,6 @@ window.Daxxer = window.Daxxer || {};
       const typedErrors = collectTypedErrors(state);
       markModelErrors(container, typedErrors);
 
-      // Existing malformed legacy values may remain visible while unrelated edits
-      // continue. Newly-created or changed invalid typed values do not persist.
       const newlyInvalid = typedErrors.filter((error) => {
         const prior = toleratedInvalid.get(errorKey(error));
         return prior === undefined || prior !== errorValue(error.value);
@@ -267,10 +268,6 @@ window.Daxxer = window.Daxxer || {};
     }, 0);
 
     repatch();
-
-    // Internal database rerenders can happen without onChange (for example view
-    // switches). Re-apply typed editors and value patches after interactions that
-    // can trigger those rerenders while leaving the base renderer isolated.
     container.addEventListener("click", repatch);
     container.addEventListener("drop", repatch);
 

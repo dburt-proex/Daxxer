@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const source = fs.readFileSync(new URL("../public/database-model.js", import.meta.url), "utf8");
 const Daxxer = {};
-const context = vm.createContext({ window: { Daxxer }, Daxxer, structuredClone, Math });
+const context = vm.createContext({ window: { Daxxer }, Daxxer, structuredClone, Math, Date });
 vm.runInContext(source, context);
 const Model = Daxxer.DatabaseModel;
 
@@ -45,10 +45,7 @@ test("unsafe board-first state falls back to a table view when no grouping prope
 
 test("number normalization converts numeric strings, preserves zero, and clears blanks", () => {
   const state = {
-    properties: [
-      { id: "name", type: "title" },
-      { id: "score", type: "number" },
-    ],
+    properties: [{ id: "name", type: "title" }, { id: "score", type: "number" }],
     rows: [
       { id: "r1", cells: { score: "42.5" } },
       { id: "r2", cells: { score: "0" } },
@@ -63,10 +60,7 @@ test("number normalization converts numeric strings, preserves zero, and clears 
 
 test("number normalization reports invalid values without overwriting them", () => {
   const state = {
-    properties: [
-      { id: "name", type: "title" },
-      { id: "score", type: "number" },
-    ],
+    properties: [{ id: "name", type: "title" }, { id: "score", type: "number" }],
     rows: [{ id: "r1", cells: { score: "not-a-number" } }],
   };
   const errors = Model.normalizeNumberCells(state);
@@ -118,10 +112,8 @@ test("date ranges normalize single dates and reject reversed ranges without over
 test("url email and phone normalization trims valid scalar values and flags malformed values", () => {
   const state = {
     properties: [
-      { id: "name", type: "title" },
-      { id: "site", type: "url" },
-      { id: "mail", type: "email" },
-      { id: "phone", type: "phone" },
+      { id: "name", type: "title" }, { id: "site", type: "url" },
+      { id: "mail", type: "email" }, { id: "phone", type: "phone" },
     ],
     rows: [
       { id: "ok", cells: { site: " https://example.com/a?b=1 ", mail: " drew@example.com ", phone: " +1 (507) 555-0123 " } },
@@ -147,9 +139,7 @@ test("unique IDs are deterministic projections of stable row IDs", () => {
 
 test("system metadata stamps new rows and preserves created time across later edits", () => {
   const properties = [
-    { id: "name", type: "title" },
-    { id: "created", type: "created_time" },
-    { id: "edited", type: "last_edited_time" },
+    { id: "name", type: "title" }, { id: "created", type: "created_time" }, { id: "edited", type: "last_edited_time" },
   ];
   const previous = { properties, rows: [] };
   const next = { properties, rows: [{ id: "r1", cells: { name: "First" } }] };
@@ -170,9 +160,7 @@ test("system metadata stamps new rows and preserves created time across later ed
 
 test("legacy rows do not receive fabricated created times", () => {
   const properties = [
-    { id: "name", type: "title" },
-    { id: "created", type: "created_time" },
-    { id: "edited", type: "last_edited_time" },
+    { id: "name", type: "title" }, { id: "created", type: "created_time" }, { id: "edited", type: "last_edited_time" },
   ];
   const previous = { properties, rows: [{ id: "legacy", cells: { name: "Old" } }] };
   const next = structuredClone(previous);
@@ -193,12 +181,62 @@ test("system timestamp validation fails visibly without rewriting invalid legacy
   assert.equal(state.rows[0].cells.created, "yesterday");
 });
 
+test("self relations resolve stable row IDs in declared order", () => {
+  const relation = { id: "related", type: "relation", target: "self" };
+  const state = {
+    properties: [{ id: "name", type: "title" }, relation],
+    rows: [
+      { id: "r1", cells: { name: "One", related: ["r3", "r2"] } },
+      { id: "r2", cells: { name: "Two" } },
+      { id: "r3", cells: { name: "Three" } },
+    ],
+  };
+  assert.equal(Model.normalizeRelationCells(state).length, 0);
+  const related = Model.relationRows(state, relation, state.rows[0]);
+  assert.equal(related.length, 2);
+  assert.equal(related[0].id, "r3");
+  assert.equal(related[1].id, "r2");
+});
+
+test("dangling relation IDs fail visibly and remain unchanged", () => {
+  const original = ["r2", "missing"];
+  const state = {
+    properties: [{ id: "name", type: "title" }, { id: "related", type: "relation", target: "self" }],
+    rows: [
+      { id: "r1", cells: { related: original } },
+      { id: "r2", cells: {} },
+    ],
+  };
+  const errors = Model.normalizeRelationCells(state);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].code, "dangling_relation");
+  assert.equal(errors[0].targetId, "missing");
+  assert.equal(state.rows[0].cells.related, original);
+});
+
+test("duplicate relation IDs and unsupported relation targets are rejected", () => {
+  const state = {
+    properties: [
+      { id: "name", type: "title" },
+      { id: "related", type: "relation", target: "self" },
+      { id: "external", type: "relation", target: "database:other" },
+    ],
+    views: [{ id: "v1", type: "table" }],
+    rows: [
+      { id: "r1", cells: { related: ["r2", "r2"] } },
+      { id: "r2", cells: {} },
+    ],
+  };
+  const relationErrors = Model.normalizeRelationCells(state);
+  assert.equal(relationErrors.length, 1);
+  assert.equal(relationErrors[0].code, "invalid_relation");
+  const structural = Model.validateState(state);
+  assert.equal(structural.some((error) => error.code === "unsupported_relation_target"), true);
+});
+
 test("validation fails visibly on duplicate identifiers and multiple title properties", () => {
   const errors = Model.validateState({
-    properties: [
-      { id: "p", type: "title" },
-      { id: "p", type: "title" },
-    ],
+    properties: [{ id: "p", type: "title" }, { id: "p", type: "title" }],
     views: [{ id: "v", type: "table" }, { id: "v", type: "board" }],
     rows: [{ id: "r", cells: {} }, { id: "r", cells: {} }],
   });

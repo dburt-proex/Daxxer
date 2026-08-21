@@ -31,9 +31,6 @@ window.Daxxer = window.Daxxer || {};
         : {},
     }));
 
-    // The legacy board renderer requires a status/select property. If a malformed
-    // database opens directly into Board without one, prepend a safe Table view
-    // so the database remains recoverable instead of throwing during render.
     const hasBoardGroupCandidate = next.properties.some((p) => p && (p.type === "status" || p.type === "select"));
     if (next.views[0] && next.views[0].type === "board" && !hasBoardGroupCandidate) {
       const table = next.views.find((v) => v && v.type === "table");
@@ -67,9 +64,7 @@ window.Daxxer = window.Daxxer || {};
         const value = row.cells[property.id];
         if (value == null) continue;
         if (typeof value === "number") {
-          if (!Number.isFinite(value)) {
-            errors.push({ code: "invalid_number", rowId: row.id, propId: property.id, value });
-          }
+          if (!Number.isFinite(value)) errors.push({ code: "invalid_number", rowId: row.id, propId: property.id, value });
           continue;
         }
         if (typeof value === "string") {
@@ -194,6 +189,52 @@ window.Daxxer = window.Daxxer || {};
     return errors;
   }
 
+  function normalizeRelationCells(state) {
+    const errors = [];
+    const properties = Array.isArray(state && state.properties) ? state.properties : [];
+    const rows = Array.isArray(state && state.rows) ? state.rows : [];
+    const rowIds = new Set(rows.filter((row) => row && row.id).map((row) => String(row.id)));
+    const relationProps = properties.filter((p) => p && p.id && p.type === "relation");
+
+    for (const property of relationProps) {
+      if ((property.target || "self") !== "self") continue;
+      for (const row of rows) {
+        if (!row || !row.cells || typeof row.cells !== "object" || Array.isArray(row.cells)) continue;
+        const value = row.cells[property.id];
+        if (value == null) continue;
+        if (!Array.isArray(value)) {
+          scalarError(errors, "invalid_relation", row, property, value);
+          continue;
+        }
+        let invalid = false;
+        const seen = new Set();
+        for (const targetId of value) {
+          if (typeof targetId !== "string" || !targetId || seen.has(targetId)) {
+            invalid = true;
+            break;
+          }
+          seen.add(targetId);
+          if (!rowIds.has(targetId)) {
+            errors.push({ code: "dangling_relation", rowId: row.id, propId: property.id, targetId, value });
+            invalid = true;
+          }
+        }
+        if (invalid && !errors.some((error) => error.rowId === row.id && error.propId === property.id)) {
+          scalarError(errors, "invalid_relation", row, property, value);
+        }
+      }
+    }
+    return errors;
+  }
+
+  function relationRows(state, property, row) {
+    if (!property || property.type !== "relation" || (property.target || "self") !== "self") return [];
+    const ids = row && row.cells && Array.isArray(row.cells[property.id]) ? row.cells[property.id] : [];
+    const rows = Array.isArray(state && state.rows) ? state.rows : [];
+    const map = new Map(rows.filter((candidate) => candidate && candidate.id).map((candidate) => [String(candidate.id), candidate]));
+    return ids.map((id) => map.get(String(id))).filter(Boolean);
+  }
+
   function uniqueIdForRow(row, property = {}) {
     if (!row || !row.id) return "";
     const prefix = typeof property.prefix === "string" ? property.prefix : "ID-";
@@ -272,17 +313,14 @@ window.Daxxer = window.Daxxer || {};
     for (const id of duplicateIds(views)) errors.push({ code: "duplicate_view_id", id });
     for (const id of duplicateIds(rows)) errors.push({ code: "duplicate_row_id", id });
 
-    if (properties.filter((p) => p && p.type === "title").length !== 1) {
-      errors.push({ code: "title_property_count" });
-    }
+    if (properties.filter((p) => p && p.type === "title").length !== 1) errors.push({ code: "title_property_count" });
     if (views.length === 0) errors.push({ code: "missing_view" });
 
     properties.forEach((p, index) => {
       if (!p || !p.id) errors.push({ code: "property_missing_id", index });
       if (!p || !p.type) errors.push({ code: "property_missing_type", index });
-      if (p && p.type === "unique_id" && p.prefix != null && typeof p.prefix !== "string") {
-        errors.push({ code: "unique_id_invalid_prefix", index });
-      }
+      if (p && p.type === "unique_id" && p.prefix != null && typeof p.prefix !== "string") errors.push({ code: "unique_id_invalid_prefix", index });
+      if (p && p.type === "relation" && (p.target || "self") !== "self") errors.push({ code: "unsupported_relation_target", index, target: p.target });
     });
     views.forEach((v, index) => {
       if (!v || !v.id) errors.push({ code: "view_missing_id", index });
@@ -290,9 +328,7 @@ window.Daxxer = window.Daxxer || {};
     });
     rows.forEach((r, index) => {
       if (!r || !r.id) errors.push({ code: "row_missing_id", index });
-      if (!r || !r.cells || typeof r.cells !== "object" || Array.isArray(r.cells)) {
-        errors.push({ code: "row_invalid_cells", index });
-      }
+      if (!r || !r.cells || typeof r.cells !== "object" || Array.isArray(r.cells)) errors.push({ code: "row_invalid_cells", index });
     });
 
     return errors;
@@ -302,6 +338,8 @@ window.Daxxer = window.Daxxer || {};
     normalizePage,
     normalizeNumberCells,
     normalizeTypedScalarCells,
+    normalizeRelationCells,
+    relationRows,
     normalizeSystemPropertyCells,
     applySystemMetadata,
     systemValueFor,
