@@ -5,6 +5,7 @@ window.Daxxer = window.Daxxer || {};
   const I = () => Daxxer.ICONS;
   const uid = (p) => p + "_" + Math.random().toString(36).slice(2, 9);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const SYSTEM_TYPES = new Set(["unique_id", "created_time", "last_edited_time"]);
 
   function Database(container, page, opts = {}) {
     const state = {
@@ -109,11 +110,18 @@ window.Daxxer = window.Daxxer || {};
         const arr = Array.isArray(v) ? v : [];
         return arr.length ? `<div class="db-cell-tags">${arr.map((id) => pill(Daxxer.optName(p, id), Daxxer.optColor(p, id))).join("")}</div>` : `<span style="color:var(--text-mute)">＋</span>`;
       }
-      // text / number / date
+      if (SYSTEM_TYPES.has(p.type)) {
+        const raw = Daxxer.DatabaseModel && Daxxer.DatabaseModel.systemValueFor
+          ? Daxxer.DatabaseModel.systemValueFor(p, row)
+          : v;
+        return `<span data-system="1" style="color:var(--text-dim);font-size:12px">${esc(raw || "")}</span>`;
+      }
+      // text / number / date and fidelity-adapted scalar types
       return `<span class="ct-text" contenteditable="true" data-edit="text">${esc(v || "")}</span>`;
     }
 
     function wireCell(cell, p, row) {
+      if (SYSTEM_TYPES.has(p.type)) return;
       if (p.type === "select" || p.type === "status" || p.type === "multi_select") {
         cell.onclick = () => openOptionPicker(cell, p, row);
       } else if (p.type === "checkbox") {
@@ -163,7 +171,6 @@ window.Daxxer = window.Daxxer || {};
         tr.appendChild(document.createElement("td"));
         tbody.appendChild(tr);
       });
-      // add row
       const addTr = document.createElement("tr"); addTr.className = "db-add-row";
       const addTd = document.createElement("td"); addTd.colSpan = state.properties.length + 1;
       addTd.innerHTML = `<button>${I().plus}New</button>`;
@@ -251,14 +258,15 @@ window.Daxxer = window.Daxxer || {};
     function addProperty() {
       const name = prompt("Property name:", "New property");
       if (!name) return;
-      const type = (prompt("Type: text, select, status, multi_select, checkbox, number", "select") || "select").trim();
+      const type = (prompt("Type: text, select, status, multi_select, checkbox, number, date, date_range, url, email, phone, unique_id, created_time, last_edited_time", "select") || "select").trim();
       const p = { id: uid("p"), name, type };
       if (["select", "status", "multi_select"].includes(type)) p.options = [];
+      if (type === "unique_id") p.prefix = (prompt("Unique ID prefix:", "ID-") || "ID-");
       state.properties.push(p); saveNow(); rerender();
     }
 
     function typeIcon(t) {
-      const map = { title: I().text, text: I().text, select: I().bullet, status: I().toggle, multi_select: I().bullet, checkbox: I().todo, number: I().numbered, date: I().database };
+      const map = { title: I().text, text: I().text, select: I().bullet, status: I().toggle, multi_select: I().bullet, checkbox: I().todo, number: I().numbered, date: I().database, date_range: I().database, url: I().text, email: I().text, phone: I().text, unique_id: I().numbered, created_time: I().database, last_edited_time: I().database };
       return `<span style="display:inline-flex">${map[t] || I().text}</span>`;
     }
 
