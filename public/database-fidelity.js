@@ -9,6 +9,7 @@ window.Daxxer = window.Daxxer || {};
 
   const errorKey = (error) => `${error.rowId || ""}|${error.propId || ""}`;
   const typedKinds = new Set(["date", "date_range", "url", "email", "phone"]);
+  const systemKinds = new Set(["unique_id", "created_time", "last_edited_time"]);
 
   function dataCells(container) {
     return Array.from(container.querySelectorAll("[data-row][data-prop]"));
@@ -41,6 +42,7 @@ window.Daxxer = window.Daxxer || {};
       invalid_url: "Enter an absolute http:// or https:// URL.",
       invalid_email: "Enter a valid email address.",
       invalid_phone: "Enter a phone value containing at least three digits and standard phone punctuation.",
+      invalid_system_time: "System-owned timestamps must be canonical UTC ISO timestamps.",
     };
     return `${messages[error.code] || "Enter a valid value."} Current value: ${errorValue(error.value)}`;
   }
@@ -63,6 +65,7 @@ window.Daxxer = window.Daxxer || {};
     return [
       ...Model.normalizeNumberCells(state),
       ...Model.normalizeTypedScalarCells(state),
+      ...Model.normalizeSystemPropertyCells(state),
     ];
   }
 
@@ -162,6 +165,33 @@ window.Daxxer = window.Daxxer || {};
     }
   }
 
+  function patchSystemDisplays(container, state) {
+    const properties = Array.isArray(state && state.properties) ? state.properties : [];
+    const rows = Array.isArray(state && state.rows) ? state.rows : [];
+    const propMap = new Map(properties.filter(Boolean).map((property) => [String(property.id), property]));
+    const rowMap = new Map(rows.filter(Boolean).map((row) => [String(row.id), row]));
+
+    for (const cell of dataCells(container)) {
+      const property = propMap.get(cell.dataset.prop);
+      if (!property || !systemKinds.has(property.type)) continue;
+      const row = rowMap.get(cell.dataset.row);
+      if (!row) continue;
+      const raw = Model.systemValueFor(property, row);
+      const label = raw && property.type !== "unique_id" && Model.isIsoTimestamp(raw)
+        ? new Date(raw).toLocaleString()
+        : (raw == null ? "" : String(raw));
+      cell.innerHTML = "";
+      const value = document.createElement("span");
+      value.dataset.daxxerSystem = "1";
+      value.textContent = label;
+      value.title = property.type === "unique_id"
+        ? "System-owned stable ID"
+        : (raw || "No trusted timestamp is available for this legacy row yet");
+      value.style.cssText = "display:inline-block;color:var(--text-dim);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%";
+      cell.appendChild(value);
+    }
+  }
+
   Daxxer.Database.mount = function guardedDatabaseMount(container, page, opts = {}) {
     const normalized = Model.normalizePage(page);
     const structuralErrors = Model.validateState(normalized);
@@ -203,9 +233,11 @@ window.Daxxer = window.Daxxer || {};
     const initialTypedErrors = collectTypedErrors(normalized);
     let toleratedInvalid = new Map(initialTypedErrors.map((error) => [errorKey(error), errorValue(error.value)]));
     let currentState = normalized;
+    let lastPersistedState = structuredClone(normalized);
 
     function onChange(state) {
       currentState = state;
+      Model.applySystemMetadata(lastPersistedState, state, new Date().toISOString());
       const typedErrors = collectTypedErrors(state);
       markModelErrors(container, typedErrors);
 
@@ -219,6 +251,7 @@ window.Daxxer = window.Daxxer || {};
 
       toleratedInvalid = new Map(typedErrors.map((error) => [errorKey(error), errorValue(error.value)]));
       if (opts.onChange) opts.onChange(state);
+      lastPersistedState = structuredClone(state);
       setTimeout(() => patchZeroDisplays(container, currentState), 0);
     }
 
@@ -229,6 +262,7 @@ window.Daxxer = window.Daxxer || {};
     const repatch = () => setTimeout(() => {
       patchZeroDisplays(container, currentState);
       patchTypedEditors(container, currentState, onChange);
+      patchSystemDisplays(container, currentState);
       markModelErrors(container, collectTypedErrors(currentState));
     }, 0);
 
