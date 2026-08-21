@@ -42,6 +42,7 @@ window.Daxxer = window.Daxxer || {};
       invalid_url: "Enter an absolute http:// or https:// URL.",
       invalid_email: "Enter a valid email address.",
       invalid_phone: "Enter a phone value containing at least three digits and standard phone punctuation.",
+      invalid_place: "Enter a place with a name, address, or a valid latitude/longitude pair.",
       invalid_system_time: "System-owned timestamps must be canonical UTC ISO timestamps.",
       invalid_relation: "Relations must contain a unique array of stable row IDs.",
       dangling_relation: `Related row ${error.targetId || ""} no longer exists.`,
@@ -67,6 +68,7 @@ window.Daxxer = window.Daxxer || {};
     return [
       ...Model.normalizeNumberCells(state),
       ...Model.normalizeTypedScalarCells(state),
+      ...Model.normalizePlaceCells(state),
       ...Model.normalizeRelationCells(state),
       ...Model.normalizeSystemPropertyCells(state),
     ];
