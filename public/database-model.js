@@ -52,6 +52,10 @@ window.Daxxer = window.Daxxer || {};
     return [...duplicates];
   }
 
+  function scalarError(errors, code, row, property, value) {
+    errors.push({ code, rowId: row.id, propId: property.id, value });
+  }
+
   function normalizeNumberCells(state) {
     const errors = [];
     const properties = Array.isArray(state && state.properties) ? state.properties : [];
@@ -96,10 +100,6 @@ window.Daxxer = window.Daxxer || {};
 
   function isIsoTimestamp(value) {
     return typeof value === "string" && ISO_TIMESTAMP_RE.test(value) && Number.isFinite(Date.parse(value));
-  }
-
-  function scalarError(errors, code, row, property, value) {
-    errors.push({ code, rowId: row.id, propId: property.id, value });
   }
 
   function normalizeTypedScalarCells(state) {
@@ -189,6 +189,72 @@ window.Daxxer = window.Daxxer || {};
     return errors;
   }
 
+  function normalizePlaceCells(state) {
+    const errors = [];
+    const properties = Array.isArray(state && state.properties) ? state.properties : [];
+    const rows = Array.isArray(state && state.rows) ? state.rows : [];
+    const placeProps = properties.filter((p) => p && p.id && p.type === "place");
+
+    for (const row of rows) {
+      if (!row || !row.cells || typeof row.cells !== "object" || Array.isArray(row.cells)) continue;
+      for (const property of placeProps) {
+        const value = row.cells[property.id];
+        if (value == null) continue;
+
+        // Legacy string locations remain readable. Only an empty string is canonicalized.
+        if (typeof value === "string") {
+          if (!value.trim()) row.cells[property.id] = null;
+          continue;
+        }
+
+        if (typeof value !== "object" || Array.isArray(value)) {
+          scalarError(errors, "invalid_place", row, property, value);
+          continue;
+        }
+
+        const nameOk = value.name == null || typeof value.name === "string";
+        const addressOk = value.address == null || typeof value.address === "string";
+        if (!nameOk || !addressOk) {
+          scalarError(errors, "invalid_place", row, property, value);
+          continue;
+        }
+
+        const name = typeof value.name === "string" ? value.name.trim() : "";
+        const address = typeof value.address === "string" ? value.address.trim() : "";
+        const hasLat = value.lat != null;
+        const hasLong = value.long != null;
+        const coordinatePair = hasLat || hasLong;
+        const coordinatesOk = !coordinatePair || (
+          hasLat && hasLong &&
+          typeof value.lat === "number" && Number.isFinite(value.lat) && value.lat >= -90 && value.lat <= 90 &&
+          typeof value.long === "number" && Number.isFinite(value.long) && value.long >= -180 && value.long <= 180
+        );
+
+        if (!coordinatesOk || (!name && !address && !coordinatePair)) {
+          scalarError(errors, "invalid_place", row, property, value);
+          continue;
+        }
+
+        row.cells[property.id] = {
+          ...(name ? { name } : {}),
+          ...(address ? { address } : {}),
+          ...(coordinatePair ? { lat: value.lat, long: value.long } : {}),
+        };
+      }
+    }
+    return errors;
+  }
+
+  function placeLabel(value) {
+    if (value == null) return "";
+    if (typeof value === "string") return value;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return "Invalid place";
+    if (typeof value.name === "string" && value.name.trim()) return value.name.trim();
+    if (typeof value.address === "string" && value.address.trim()) return value.address.trim();
+    if (Number.isFinite(value.lat) && Number.isFinite(value.long)) return `${value.lat}, ${value.long}`;
+    return "Invalid place";
+  }
+
   function normalizeRelationCells(state) {
     const errors = [];
     const properties = Array.isArray(state && state.properties) ? state.properties : [];
@@ -233,6 +299,38 @@ window.Daxxer = window.Daxxer || {};
     const rows = Array.isArray(state && state.rows) ? state.rows : [];
     const map = new Map(rows.filter((candidate) => candidate && candidate.id).map((candidate) => [String(candidate.id), candidate]));
     return ids.map((id) => map.get(String(id))).filter(Boolean);
+  }
+
+  function resolveProperty(state, key) {
+    const properties = Array.isArray(state && state.properties) ? state.properties : [];
+    return properties.find((property) => property && (property.id === key || property.name === key)) || null;
+  }
+
+  function buttonActionResult(state, property) {
+    if (!property || property.type !== "button") return { ok: false, error: { code: "button_property", message: "Button property configuration is missing." } };
+    const action = property.action;
+    if (!action || typeof action !== "object" || Array.isArray(action)) {
+      return { ok: false, error: { code: "button_action", message: "Button requires an explicit bounded action." } };
+    }
+    if (action.type !== "toggle_checkbox") {
+      return { ok: false, error: { code: "button_action_unsupported", message: `Unsupported button action '${String(action.type || "")}'.` } };
+    }
+    const target = resolveProperty(state, action.property);
+    if (!target || target.type !== "checkbox") {
+      return { ok: false, error: { code: "button_target", message: "toggle_checkbox requires an existing checkbox property." } };
+    }
+    return { ok: true, target };
+  }
+
+  function applyButtonAction(state, property, row) {
+    const config = buttonActionResult(state, property);
+    if (!config.ok) return config;
+    if (!row || !row.cells || typeof row.cells !== "object" || Array.isArray(row.cells)) {
+      return { ok: false, error: { code: "button_row", message: "Button row is malformed." } };
+    }
+    const nextValue = !Boolean(row.cells[config.target.id]);
+    row.cells[config.target.id] = nextValue;
+    return { ok: true, targetId: config.target.id, value: nextValue };
   }
 
   function uniqueIdForRow(row, property = {}) {
@@ -338,8 +436,12 @@ window.Daxxer = window.Daxxer || {};
     normalizePage,
     normalizeNumberCells,
     normalizeTypedScalarCells,
+    normalizePlaceCells,
+    placeLabel,
     normalizeRelationCells,
     relationRows,
+    buttonActionResult,
+    applyButtonAction,
     normalizeSystemPropertyCells,
     applySystemMetadata,
     systemValueFor,
