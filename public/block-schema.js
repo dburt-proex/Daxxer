@@ -1,6 +1,6 @@
 // Versioned, non-destructive block content contract for Daxxer pages.
-// v1 is additive over the legacy {id,type,text,...,children} shape so old pages
-// remain readable and downgrade can preserve meaning + IDs.
+// v1 is additive over the legacy {id,type,text,...,children} shape. The version
+// marker lives inside each block because `blocks` is an authorized bridge field.
 window.Daxxer = window.Daxxer || {};
 
 (function () {
@@ -11,9 +11,7 @@ window.Daxxer = window.Daxxer || {};
   ]);
   const BOOLEAN_MARKS = ["bold", "italic", "underline", "strike", "code"];
 
-  function clone(value) {
-    return structuredClone(value);
-  }
+  function clone(value) { return structuredClone(value); }
 
   function plainText(richText) {
     if (!Array.isArray(richText)) return "";
@@ -48,13 +46,24 @@ window.Daxxer = window.Daxxer || {};
       if (typeof segment.text !== "string") return { ok: false, error: "rich_text_text_invalid", index: i };
       const marks = cleanMarks(segment.marks);
       if (marks == null) return { ok: false, error: "rich_text_marks_invalid", index: i };
-      if (segment.href != null && typeof segment.href !== "string") {
-        return { ok: false, error: "rich_text_href_invalid", index: i };
-      }
+      if (segment.href != null && typeof segment.href !== "string") return { ok: false, error: "rich_text_href_invalid", index: i };
       // Preserve unknown segment fields for forward compatibility.
       out.push({ ...segment, text: segment.text, marks, href: segment.href || null });
     }
     return { ok: true, value: out };
+  }
+
+  function blockVersion(block, path, errors) {
+    const raw = block.schemaVersion == null ? 0 : Number(block.schemaVersion);
+    if (!Number.isInteger(raw) || raw < 0) {
+      errors.push({ code: "block_schema_version_invalid", path, id: block.id, value: block.schemaVersion });
+      return null;
+    }
+    if (raw > CURRENT_VERSION) {
+      errors.push({ code: "block_schema_version_unsupported", path, id: block.id, value: raw, supported: CURRENT_VERSION });
+      return null;
+    }
+    return raw;
   }
 
   function migrateBlock(block, path, errors, warnings) {
@@ -67,21 +76,24 @@ window.Daxxer = window.Daxxer || {};
     if (typeof next.type !== "string" || !next.type) errors.push({ code: "block_missing_type", path, id: next.id });
     else if (!KNOWN_BLOCK_TYPES.has(next.type)) warnings.push({ code: "unknown_block_type", path, id: next.id, type: next.type });
 
+    const version = blockVersion(next, path, errors);
+    if (version == null) return next;
+
     const hasRichText = Object.prototype.hasOwnProperty.call(next, "richText");
     if (hasRichText) {
       const normalized = normalizeRichText(next.richText);
-      if (!normalized.ok) {
-        errors.push({ code: normalized.error, path, id: next.id, index: normalized.index });
-      } else {
+      if (!normalized.ok) errors.push({ code: normalized.error, path, id: next.id, index: normalized.index });
+      else {
         next.richText = normalized.value;
-        // text remains the backward-compatible plain-text projection.
-        next.text = plainText(normalized.value);
+        next.text = plainText(normalized.value); // legacy/search/recovery projection
       }
     } else {
       const legacyText = next.text == null ? "" : String(next.text);
       next.text = legacyText;
       next.richText = legacyText ? [{ text: legacyText, marks: {}, href: null }] : [];
     }
+
+    next.schemaVersion = CURRENT_VERSION;
 
     if (next.children != null) {
       if (!Array.isArray(next.children)) errors.push({ code: "block_children_invalid", path, id: next.id });
@@ -92,23 +104,11 @@ window.Daxxer = window.Daxxer || {};
 
   function migratePage(page) {
     const source = clone(page || {});
-    const version = source.contentSchemaVersion == null ? 0 : Number(source.contentSchemaVersion);
-    if (!Number.isInteger(version) || version < 0) {
-      return { ok: false, errors: [{ code: "content_schema_version_invalid", value: source.contentSchemaVersion }], warnings: [], page: source };
-    }
-    if (version > CURRENT_VERSION) {
-      return { ok: false, errors: [{ code: "content_schema_version_unsupported", value: version, supported: CURRENT_VERSION }], warnings: [], page: source };
-    }
-
     const errors = [];
     const warnings = [];
-    if (source.blocks != null && !Array.isArray(source.blocks)) {
-      errors.push({ code: "page_blocks_invalid" });
-    } else {
-      source.blocks = (source.blocks || []).map((block, index) => migrateBlock(block, `blocks[${index}]`, errors, warnings));
-    }
-    source.contentSchemaVersion = CURRENT_VERSION;
-    return { ok: errors.length === 0, errors, warnings, page: source, fromVersion: version, toVersion: CURRENT_VERSION };
+    if (source.blocks != null && !Array.isArray(source.blocks)) errors.push({ code: "page_blocks_invalid" });
+    else source.blocks = (source.blocks || []).map((block, index) => migrateBlock(block, `blocks[${index}]`, errors, warnings));
+    return { ok: errors.length === 0, errors, warnings, page: source, toVersion: CURRENT_VERSION };
   }
 
   function downgradeBlock(block) {
@@ -116,6 +116,7 @@ window.Daxxer = window.Daxxer || {};
     const next = { ...clone(block) };
     if (Array.isArray(next.richText)) next.text = plainText(next.richText);
     delete next.richText;
+    delete next.schemaVersion;
     if (Array.isArray(next.children)) next.children = next.children.map(downgradeBlock);
     return next;
   }
@@ -123,15 +124,14 @@ window.Daxxer = window.Daxxer || {};
   function downgradePage(page) {
     const next = clone(page || {});
     if (Array.isArray(next.blocks)) next.blocks = next.blocks.map(downgradeBlock);
+    // Remove the never-activated page-level marker if a pre-activation fixture contains it.
     delete next.contentSchemaVersion;
     return next;
   }
 
   function prepareForPersistence(page) {
-    const result = migratePage(page);
-    if (!result.ok) return result;
     // Unknown block types/fields are preserved and surfaced as warnings rather than dropped.
-    return result;
+    return migratePage(page);
   }
 
   Daxxer.BlockSchema = {
