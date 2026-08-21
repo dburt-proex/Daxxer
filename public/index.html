@@ -10,24 +10,49 @@
   </head>
   <body>
     <div id="app">
+      <!-- ============ SIDEBAR ============ -->
       <aside id="sidebar">
         <div class="sb-head">
-          <button class="ws-switcher" id="wsSwitcher"><span class="ws-logo">D</span><span class="ws-name">Daxxer</span><svg class="chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
-          <button class="icon-btn sb-collapse" id="collapseBtn" title="Collapse sidebar"><svg viewBox="0 0 24 24"><path d="M9 4v16M4 5h16v14H4z" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></button>
+          <button class="ws-switcher" id="wsSwitcher">
+            <span class="ws-logo">D</span>
+            <span class="ws-name">Daxxer</span>
+            <svg class="chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+          <button class="icon-btn sb-collapse" id="collapseBtn" title="Collapse sidebar">
+            <svg viewBox="0 0 24 24"><path d="M9 4v16M4 5h16v14H4z" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
+          </button>
         </div>
+
         <div class="sb-actions">
           <button class="sb-link" id="searchOpen"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>Search</button>
           <button class="sb-link" id="homeLink"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8M5 9v10h5v-6h4v6h5V9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>Home</button>
           <button class="sb-link" id="reviewLink"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M12 3l7 4v5c0 4.4-3 8.3-7 9-4-0.7-7-4.6-7-9V7z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>Review queue<span class="sb-count" id="reviewCount" hidden></span></button>
           <button class="sb-link" id="trashLink"><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>Trash</button>
         </div>
+
         <div class="sb-scroll">
-          <div class="sb-section" id="favSection"><div class="sb-section-title">Favorites</div><div id="favList"></div></div>
-          <div class="sb-section"><div class="sb-section-title">Teamspaces</div><div id="teamspaceList"></div></div>
-          <div class="sb-section"><div class="sb-section-title">Private</div><div id="privateList"></div></div>
+          <div class="sb-section" id="favSection">
+            <div class="sb-section-title">Favorites</div>
+            <div id="favList"></div>
+          </div>
+
+          <div class="sb-section">
+            <div class="sb-section-title">Teamspaces</div>
+            <div id="teamspaceList"></div>
+          </div>
+
+          <div class="sb-section">
+            <div class="sb-section-title">Private</div>
+            <div id="privateList"></div>
+          </div>
         </div>
-        <div class="sb-foot"><button class="sb-newpage" id="newPageBtn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>New page</button></div>
+
+        <div class="sb-foot">
+          <button class="sb-newpage" id="newPageBtn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>New page</button>
+        </div>
       </aside>
+
+      <!-- ============ MAIN ============ -->
       <main id="main">
         <header class="topbar">
           <button class="icon-btn" id="expandBtn" title="Open sidebar" hidden><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
@@ -39,19 +64,34 @@
             <button class="icon-btn" id="moreBtn" title="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>
           </div>
         </header>
-        <div id="pageScroll"><div id="pageContainer"></div></div>
+
+        <div id="pageScroll">
+          <div id="pageContainer"></div>
+        </div>
       </main>
     </div>
+
+    <!-- ============ SEARCH OVERLAY ============ -->
     <div class="overlay" id="searchOverlay" hidden>
       <div class="search-modal">
-        <div class="search-input-row"><svg viewBox="0 0 24 24" class="s-ico"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><input id="searchInput" placeholder="Search Daxxer…" /><button id="searchClose" class="s-close" title="Close (Esc)"><kbd>Esc</kbd><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button></div>
+        <div class="search-input-row">
+          <svg viewBox="0 0 24 24" class="s-ico"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M21 21l-4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input id="searchInput" placeholder="Search Daxxer…" />
+          <button id="searchClose" class="s-close" title="Close (Esc)"><kbd>Esc</kbd><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+        </div>
         <div class="search-results" id="searchResults"><div class="s-hint">Search pages, blocks, and database rows.</div></div>
       </div>
     </div>
+
+    <!-- ============ SLASH MENU ============ -->
     <div class="popover" id="slashMenu" hidden></div>
+    <!-- ============ EMOJI PICKER ============ -->
     <div class="popover" id="emojiPicker" hidden></div>
+    <!-- ============ CONTEXT MENU ============ -->
     <div class="popover" id="ctxMenu" hidden></div>
+
     <div class="toast" id="toast" hidden></div>
+
     <script src="/icons.js"></script>
     <script src="/block-ops.js"></script>
     <script src="/editor.js"></script>
