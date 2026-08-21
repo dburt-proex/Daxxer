@@ -1,0 +1,91 @@
+.rt-toolbar {
+  position: fixed;
+  z-index: 2400;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 34px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel, var(--bg));
+  box-shadow: 0 6px 22px rgba(15, 20, 35, .16);
+}
+
+.rt-toolbar[hidden], .rt-palette[hidden] { display: none !important; }
+
+.rt-toolbar button {
+  width: 30px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rt-toolbar button:hover { background: var(--hover); }
+.rt-divider { width: 1px; height: 20px; margin: 0 2px; background: var(--border); }
+.rt-code-label { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; }
+.rt-color-label { font-weight: 650; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.rt-caret { font-size: 9px; color: var(--text-dim); }
+
+.rt-palette {
+  position: fixed;
+  z-index: 2410;
+  width: 232px;
+  max-height: min(420px, calc(100vh - 20px));
+  overflow: auto;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel, var(--bg));
+  box-shadow: 0 8px 28px rgba(15, 20, 35, .18);
+}
+
+.rt-palette-title {
+  padding: 5px 7px 4px;
+  color: var(--text-mute);
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.rt-palette-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+
+.rt-palette button {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rt-palette button:hover { background: var(--hover); }
+
+.rt-swatch {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-weight: 700;
+}
