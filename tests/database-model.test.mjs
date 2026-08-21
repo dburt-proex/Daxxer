@@ -153,13 +153,17 @@ test("system metadata stamps new rows and preserves created time across later ed
   ];
   const previous = { properties, rows: [] };
   const next = { properties, rows: [{ id: "r1", cells: { name: "First" } }] };
-  assert.deepEqual(Model.applySystemMetadata(previous, next, "2026-08-20T23:30:00.000Z"), ["r1"]);
+  const firstTouched = Model.applySystemMetadata(previous, next, "2026-08-20T23:30:00.000Z");
+  assert.equal(firstTouched.length, 1);
+  assert.equal(firstTouched[0], "r1");
   assert.equal(next.rows[0].cells.created, "2026-08-20T23:30:00.000Z");
   assert.equal(next.rows[0].cells.edited, "2026-08-20T23:30:00.000Z");
 
   const persisted = structuredClone(next);
   next.rows[0].cells.name = "Changed";
-  assert.deepEqual(Model.applySystemMetadata(persisted, next, "2026-08-20T23:31:00.000Z"), ["r1"]);
+  const secondTouched = Model.applySystemMetadata(persisted, next, "2026-08-20T23:31:00.000Z");
+  assert.equal(secondTouched.length, 1);
+  assert.equal(secondTouched[0], "r1");
   assert.equal(next.rows[0].cells.created, "2026-08-20T23:30:00.000Z");
   assert.equal(next.rows[0].cells.edited, "2026-08-20T23:31:00.000Z");
 });
