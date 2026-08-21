@@ -3,6 +3,7 @@ window.Daxxer = window.Daxxer || {};
 
 (function () {
   const MARKS = new Set(["bold", "italic", "underline", "strike", "code"]);
+  const STYLE_MARKS = new Set(["color", "background"]);
 
   function cloneSegments(segments) {
     return structuredClone(Array.isArray(segments) ? segments : []);
@@ -91,6 +92,23 @@ window.Daxxer = window.Daxxer || {};
     return applyMark(segments, start, end, mark, !selectionHasMark(segments, start, end, mark));
   }
 
+  function applyStyle(segments, start, end, key, value) {
+    if (!STYLE_MARKS.has(key)) return { ok: false, error: "unsupported_style_mark", segments: compact(segments) };
+    if (value != null && typeof value !== "string") return { ok: false, error: "invalid_style_value", segments: compact(segments) };
+    const total = length(segments);
+    const a = Math.max(0, Math.min(start, total));
+    const b = Math.max(a, Math.min(end, total));
+    if (a === b) return { ok: false, error: "empty_selection", segments: compact(segments) };
+    const before = slice(segments, 0, a);
+    const selected = slice(segments, a, b).map((segment) => {
+      const marks = { ...(segment.marks || {}) };
+      if (value) marks[key] = value; else delete marks[key];
+      return { ...segment, marks };
+    });
+    const after = slice(segments, b, total);
+    return { ok: true, segments: concat(concat(before, selected), after) };
+  }
+
   function applyLink(segments, start, end, href) {
     const total = length(segments);
     const a = Math.max(0, Math.min(start, total));
@@ -131,6 +149,6 @@ window.Daxxer = window.Daxxer || {};
 
   Daxxer.RichText = {
     plainText, compact, fromText, length, slice, split, concat,
-    selectionHasMark, applyMark, toggleMark, applyLink, replaceRange, styleAt,
+    selectionHasMark, applyMark, toggleMark, applyStyle, applyLink, replaceRange, styleAt,
   };
 })();
