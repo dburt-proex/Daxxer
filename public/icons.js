@@ -26,12 +26,14 @@ Daxxer.ICONS = {
   board: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="5" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="10" y="4" width="5" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="17" y="4" width="4" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
 };
 
-// Block type registry drives the slash menu + rendering.
 Daxxer.BLOCK_TYPES = [
   { type: "paragraph", name: "Text", desc: "Just start writing plain text.", icon: "text", group: "Basic" },
   { type: "heading1", name: "Heading 1", desc: "Big section heading.", icon: "h1", group: "Basic" },
   { type: "heading2", name: "Heading 2", desc: "Medium section heading.", icon: "h2", group: "Basic" },
   { type: "heading3", name: "Heading 3", desc: "Small section heading.", icon: "h3", group: "Basic" },
+  { type: "toggle_heading1", name: "Toggle heading 1", desc: "Large collapsible section heading.", icon: "h1", group: "Basic" },
+  { type: "toggle_heading2", name: "Toggle heading 2", desc: "Medium collapsible section heading.", icon: "h2", group: "Basic" },
+  { type: "toggle_heading3", name: "Toggle heading 3", desc: "Small collapsible section heading.", icon: "h3", group: "Basic" },
   { type: "bulleted", name: "Bulleted list", desc: "Simple bulleted list.", icon: "bullet", group: "Basic" },
   { type: "numbered", name: "Numbered list", desc: "List with numbering.", icon: "numbered", group: "Basic" },
   { type: "todo", name: "To-do list", desc: "Track tasks with a checkbox.", icon: "todo", group: "Basic" },
@@ -50,6 +52,5 @@ Daxxer.SWATCH = {
 
 Daxxer.EMOJIS = "📄 📝 📕 📗 📘 📙 📚 📖 🗂️ 📁 📂 🗃️ 🗄️ 📊 📈 📉 💼 💰 💵 💳 🏦 🎯 🚀 🔥 ⭐ ✨ 💡 🧠 🧩 ⚙️ 🛠️ 🔧 🔨 🧰 🖥️ 💻 ⌨️ 🖱️ 📱 🔌 🔋 🌐 🔗 📡 🛰️ ✅ ☑️ 📌 📍 🏷️ 🔖 📎 ✏️ 🖊️ 🖍️ 🎨 🖌️ 🏠 🏢 🏭 🏗️ 🧱 🅱️ 🔻 🔺 🏆 🥇 🎖️ 👑 🦄 🐝 🐙 🦋 🌱 🌿 🍀 🌻 🌊 ⚡ ❄️ 🔮".split(" ");
 
-// tag helpers
 Daxxer.optName = (prop, id) => { const o = (prop.options || []).find((x) => x.id === id); return o ? o.name : ""; };
 Daxxer.optColor = (prop, id) => { const o = (prop.options || []).find((x) => x.id === id); return o ? o.color : "gray"; };

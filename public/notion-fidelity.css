@@ -27,6 +27,12 @@ body { color: var(--nf-text); }
 .block[data-type="heading1"] .editable { font-size: 30px; font-weight: 700; padding-top: 20px; }
 .block[data-type="heading2"] .editable { font-size: 24px; font-weight: 600; padding-top: 14px; }
 .block[data-type="heading3"] .editable { font-size: 20px; font-weight: 600; padding-top: 10px; }
+.toggle-head.toggle-heading-1 .editable { font-size: 30px; font-weight: 700; padding-top: 18px; }
+.toggle-head.toggle-heading-2 .editable { font-size: 24px; font-weight: 600; padding-top: 12px; }
+.toggle-head.toggle-heading-3 .editable { font-size: 20px; font-weight: 600; padding-top: 8px; }
+.toggle-head.toggle-heading-1 .toggle-arrow,
+.toggle-head.toggle-heading-2 .toggle-arrow,
+.toggle-head.toggle-heading-3 .toggle-arrow { align-self: flex-start; margin-top: 8px; }
 .block-gutter { left: -48px; }
 .gutter-btn { border-radius: 3px; }
 
