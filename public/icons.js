@@ -41,6 +41,7 @@ Daxxer.BLOCK_TYPES = [
   { type: "quote", name: "Quote", desc: "Capture a quote.", icon: "quote", group: "Basic" },
   { type: "callout", name: "Callout", desc: "Make writing stand out.", icon: "callout", group: "Basic" },
   { type: "divider", name: "Divider", desc: "Visually divide blocks.", icon: "divider", group: "Basic" },
+  { type: "table_block", name: "Simple table", desc: "Create a lightweight table block.", icon: "table", group: "Advanced" },
   { type: "code", name: "Code", desc: "Capture a code snippet.", icon: "code", group: "Media" },
 ];
 
