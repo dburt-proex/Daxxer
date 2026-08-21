@@ -138,6 +138,57 @@ test("url email and phone normalization trims valid scalar values and flags malf
   assert.equal(state.rows[1].cells.phone, "call-me");
 });
 
+test("unique IDs are deterministic projections of stable row IDs", () => {
+  const row = { id: "r_alpha", cells: {} };
+  assert.equal(Model.uniqueIdForRow(row, { type: "unique_id" }), "ID-r_alpha");
+  assert.equal(Model.uniqueIdForRow(row, { type: "unique_id", prefix: "TASK-" }), "TASK-r_alpha");
+  assert.equal(Model.systemValueFor({ type: "unique_id", prefix: "TASK-" }, row), "TASK-r_alpha");
+});
+
+test("system metadata stamps new rows and preserves created time across later edits", () => {
+  const properties = [
+    { id: "name", type: "title" },
+    { id: "created", type: "created_time" },
+    { id: "edited", type: "last_edited_time" },
+  ];
+  const previous = { properties, rows: [] };
+  const next = { properties, rows: [{ id: "r1", cells: { name: "First" } }] };
+  assert.deepEqual(Model.applySystemMetadata(previous, next, "2026-08-20T23:30:00.000Z"), ["r1"]);
+  assert.equal(next.rows[0].cells.created, "2026-08-20T23:30:00.000Z");
+  assert.equal(next.rows[0].cells.edited, "2026-08-20T23:30:00.000Z");
+
+  const persisted = structuredClone(next);
+  next.rows[0].cells.name = "Changed";
+  assert.deepEqual(Model.applySystemMetadata(persisted, next, "2026-08-20T23:31:00.000Z"), ["r1"]);
+  assert.equal(next.rows[0].cells.created, "2026-08-20T23:30:00.000Z");
+  assert.equal(next.rows[0].cells.edited, "2026-08-20T23:31:00.000Z");
+});
+
+test("legacy rows do not receive fabricated created times", () => {
+  const properties = [
+    { id: "name", type: "title" },
+    { id: "created", type: "created_time" },
+    { id: "edited", type: "last_edited_time" },
+  ];
+  const previous = { properties, rows: [{ id: "legacy", cells: { name: "Old" } }] };
+  const next = structuredClone(previous);
+  next.rows[0].cells.name = "Old but edited";
+  Model.applySystemMetadata(previous, next, "2026-08-20T23:32:00.000Z");
+  assert.equal(next.rows[0].cells.created, undefined);
+  assert.equal(next.rows[0].cells.edited, "2026-08-20T23:32:00.000Z");
+});
+
+test("system timestamp validation fails visibly without rewriting invalid legacy values", () => {
+  const state = {
+    properties: [{ id: "name", type: "title" }, { id: "created", type: "created_time" }],
+    rows: [{ id: "r1", cells: { name: "A", created: "yesterday" } }],
+  };
+  const errors = Model.normalizeSystemPropertyCells(state);
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0].code, "invalid_system_time");
+  assert.equal(state.rows[0].cells.created, "yesterday");
+});
+
 test("validation fails visibly on duplicate identifiers and multiple title properties", () => {
   const errors = Model.validateState({
     properties: [
