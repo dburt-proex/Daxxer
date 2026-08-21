@@ -7,7 +7,7 @@ window.Daxxer = window.Daxxer || {};
   const CURRENT_VERSION = 1;
   const KNOWN_BLOCK_TYPES = new Set([
     "paragraph", "heading1", "heading2", "heading3", "bulleted", "numbered",
-    "todo", "toggle", "quote", "callout", "divider", "code",
+    "todo", "toggle", "quote", "callout", "divider", "code", "table",
   ]);
   const BOOLEAN_MARKS = ["bold", "italic", "underline", "strike", "code"];
 
@@ -47,7 +47,6 @@ window.Daxxer = window.Daxxer || {};
       const marks = cleanMarks(segment.marks);
       if (marks == null) return { ok: false, error: "rich_text_marks_invalid", index: i };
       if (segment.href != null && typeof segment.href !== "string") return { ok: false, error: "rich_text_href_invalid", index: i };
-      // Preserve unknown segment fields for forward compatibility.
       out.push({ ...segment, text: segment.text, marks, href: segment.href || null });
     }
     return { ok: true, value: out };
@@ -85,7 +84,7 @@ window.Daxxer = window.Daxxer || {};
       if (!normalized.ok) errors.push({ code: normalized.error, path, id: next.id, index: normalized.index });
       else {
         next.richText = normalized.value;
-        next.text = plainText(normalized.value); // legacy/search/recovery projection
+        next.text = plainText(normalized.value);
       }
     } else {
       const legacyText = next.text == null ? "" : String(next.text);
@@ -124,13 +123,11 @@ window.Daxxer = window.Daxxer || {};
   function downgradePage(page) {
     const next = clone(page || {});
     if (Array.isArray(next.blocks)) next.blocks = next.blocks.map(downgradeBlock);
-    // Remove the never-activated page-level marker if a pre-activation fixture contains it.
     delete next.contentSchemaVersion;
     return next;
   }
 
   function prepareForPersistence(page) {
-    // Unknown block types/fields are preserved and surfaced as warnings rather than dropped.
     return migratePage(page);
   }
 
