@@ -1,0 +1,40 @@
+name: Desktop Release Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "daxxer-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Full validation
+        run: npm run check
+      - name: Package Windows app
+        run: npm run package
+      - name: Verify executable exists
+        shell: pwsh
+        run: |
+          $exe = "dist/Daxxer-win32-x64/Daxxer.exe"
+          if (-not (Test-Path $exe)) { throw "Missing packaged executable: $exe" }
+          Get-Item $exe | Format-List Name,Length,LastWriteTime
+      - name: Upload packaged app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Daxxer-win32-x64
+          path: dist/Daxxer-win32-x64/
+          if-no-files-found: error
+          retention-days: 14
