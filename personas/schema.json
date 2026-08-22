@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://daxxer.local/personas/schema-v1.json",
+  "title": "Daxxer Persona Library",
+  "type": "object",
+  "required": ["schemaVersion", "libraryId", "principles", "personas"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "libraryId": { "type": "string", "minLength": 1 },
+    "principles": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 },
+    "personas": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "role", "mission", "cognitivePosture", "strengths", "failureModes", "countermeasures", "decisionRights", "forbidden", "evidenceStandard", "escalateWhen"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+\\.[a-z0-9-]+$" },
+          "name": { "type": "string", "minLength": 2 },
+          "role": { "type": "string", "minLength": 3 },
+          "mission": { "type": "string", "minLength": 12 },
+          "cognitivePosture": { "$ref": "#/$defs/nonEmptyStrings" },
+          "strengths": { "$ref": "#/$defs/nonEmptyStrings" },
+          "failureModes": { "$ref": "#/$defs/nonEmptyStrings" },
+          "countermeasures": { "$ref": "#/$defs/nonEmptyStrings" },
+          "decisionRights": { "$ref": "#/$defs/nonEmptyStrings" },
+          "forbidden": { "$ref": "#/$defs/nonEmptyStrings" },
+          "evidenceStandard": { "type": "string", "minLength": 8 },
+          "escalateWhen": { "$ref": "#/$defs/nonEmptyStrings" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyStrings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}
