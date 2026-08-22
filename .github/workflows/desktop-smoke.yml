@@ -5,6 +5,12 @@ on:
   push:
     tags:
       - "daxxer-v*"
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-smoke.yml"
+      - "electron/**"
+      - "package.json"
+      - "package-lock.json"
 
 permissions:
   contents: read
