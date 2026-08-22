@@ -1,7 +1,7 @@
 {
   "name": "daxxer",
   "version": "1.0.0",
-  "description": "Daxxer — a block-based workspace desktop app. Pages, a block editor, and typed databases.",
+  "description": "Daxxer — a local-first governed block workspace desktop app with typed databases and deterministic views.",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -11,8 +11,9 @@
     "seed": "node lib/reset.js",
     "icon": "node electron/make-icon.cjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check server.js && node --check public/editor.js && node --check public/block-ops.js && node --check public/block-schema.js && node --check public/block-command.js && node --check public/table-block.js && node --check public/rich-text.js && node --check public/rich-text-toolbar.js && node --check public/notion-fidelity.js && node --check public/toggle-heading-fidelity.js && node --check public/table-block-fidelity.js && node --check public/database-model.js && node --check public/formula-engine.js && node --check public/database.js && node --check public/database-fidelity.js && node --test tests/*.test.mjs",
-    "package": "electron-packager . Daxxer --platform=win32 --arch=x64 --out=dist --overwrite --no-asar --icon=electron/icon.ico --ignore=\"^/DaxxerOS_Local\" --ignore=\"^/dist\" --ignore=\"^/data\""
+    "check": "node --check server.js && node --check electron/main.cjs && node --check public/editor.js && node --check public/block-ops.js && node --check public/block-schema.js && node --check public/block-command.js && node --check public/table-block.js && node --check public/rich-text.js && node --check public/rich-text-toolbar.js && node --check public/notion-fidelity.js && node --check public/toggle-heading-fidelity.js && node --check public/table-block-fidelity.js && node --check public/database-model.js && node --check public/formula-engine.js && node --check public/rollup-engine.js && node --check public/database.js && node --check public/database-fidelity.js && node --check public/view-projection.js && node --check public/database-view-surface.js && node --check public/operator-profile.js && node --test tests/*.test.mjs",
+    "package": "electron-packager . Daxxer --platform=win32 --arch=x64 --out=dist --overwrite --no-asar --icon=electron/icon.ico --ignore=\"^/DaxxerOS_Local\" --ignore=\"^/dist\" --ignore=\"^/data\"",
+    "release:check": "npm run check && npm run package"
   },
   "engines": { "node": ">=18" },
   "license": "MIT",
