@@ -1,18 +1,20 @@
 /* Notion-fidelity pass 1: geometry and editor affordances only. */
 :root {
-  --nf-sidebar: #f7f7f5;
-  --nf-hover: rgba(55, 53, 47, 0.08);
-  --nf-text: rgb(55, 53, 47);
-  --nf-muted: rgba(55, 53, 47, 0.65);
-  --nf-selection: rgba(35, 131, 226, 0.14);
-  --nf-selection-line: rgb(35, 131, 226);
+  --nf-sidebar: var(--shell);
+  --nf-hover: var(--sidebar-hover);
+  --nf-text: var(--text);
+  --nf-muted: var(--text-dim);
+  --nf-selection: var(--blue-soft);
+  --nf-selection-line: var(--blue);
 }
 
-body { color: var(--nf-text); }
+body { color: var(--text); }
 #sidebar { background: var(--nf-sidebar); }
-.sb-link, .tree-row, .tb-btn, .breadcrumb { color: var(--nf-muted); }
-.sb-link:hover, .tree-row:hover, .icon-btn:hover, .tb-btn:hover { background: var(--nf-hover); }
-.tree-row.active { background: var(--nf-hover); color: var(--nf-text); font-weight: 500; }
+#sidebar .sb-link, #sidebar .tree-row { color: var(--shell-dim); }
+.tb-btn, .breadcrumb { color: var(--nf-muted); }
+#sidebar .sb-link:hover, #sidebar .tree-row:hover, #sidebar .icon-btn:hover { background: var(--shell-hover); color: var(--shell-text); }
+#sidebar .tree-row.active { background: var(--shell-active); color: #f6d8d2; font-weight: 500; }
+.icon-btn:hover, .tb-btn:hover { background: var(--nf-hover); }
 
 #pageContainer { max-width: 830px; padding-left: 62px; padding-right: 62px; }
 .page-title-input { font-size: 40px; font-weight: 700; letter-spacing: -0.025em; }

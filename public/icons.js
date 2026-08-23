@@ -47,8 +47,8 @@ Daxxer.BLOCK_TYPES = [
 
 Daxxer.TAG_COLORS = ["gray", "blue", "orange", "green", "yellow", "purple", "red", "pink"];
 Daxxer.SWATCH = {
-  gray: "#eceef1", blue: "#e3edfd", orange: "#ffe9d6", green: "#dcf5e6",
-  yellow: "#fdf1cf", purple: "#efe6fc", red: "#fde3e1", pink: "#fce4f1",
+  gray: "var(--sidebar)", blue: "var(--blue-soft)", orange: "var(--blue-soft)", green: "var(--tag-green-bg)",
+  yellow: "var(--tag-yellow-bg)", purple: "var(--tag-purple-bg)", red: "var(--tag-red-bg)", pink: "var(--tag-pink-bg)",
 };
 
 Daxxer.EMOJIS = "📄 📝 📕 📗 📘 📙 📚 📖 🗂️ 📁 📂 🗃️ 🗄️ 📊 📈 📉 💼 💰 💵 💳 🏦 🎯 🚀 🔥 ⭐ ✨ 💡 🧠 🧩 ⚙️ 🛠️ 🔧 🔨 🧰 🖥️ 💻 ⌨️ 🖱️ 📱 🔌 🔋 🌐 🔗 📡 🛰️ ✅ ☑️ 📌 📍 🏷️ 🔖 📎 ✏️ 🖊️ 🖍️ 🎨 🖌️ 🏠 🏢 🏭 🏗️ 🧱 🅱️ 🔻 🔺 🏆 🥇 🎖️ 👑 🦄 🐝 🐙 🦋 🌱 🌿 🍀 🌻 🌊 ⚡ ❄️ 🔮".split(" ");

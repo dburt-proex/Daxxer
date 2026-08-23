@@ -73,7 +73,7 @@ async function createWindow() {
     ...(saved.y === undefined ? {} : { y: saved.y }),
     minWidth: 720,
     minHeight: 480,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#f7f3ed",
     title: "Daxxer",
     autoHideMenuBar: true,
     icon: path.join(__dirname, "icon.png"),

@@ -68,6 +68,12 @@ async function handleApi(req, res, url) {
     if (restore && method === "POST")
       return sendJSON(res, 200, store.restorePage(decodeURIComponent(restore[1])));
 
+    const duplicate = pathname.match(/^\/api\/pages\/([^/]+)\/duplicate$/);
+    if (duplicate && method === "POST") {
+      const page = store.duplicatePage(decodeURIComponent(duplicate[1]));
+      return sendJSON(res, page ? 201 : 404, page || { error: "not found" });
+    }
+
     const auditPath = pathname.match(/^\/api\/pages\/([^/]+)\/audit$/);
     if (auditPath && method === "GET")
       return sendJSON(res, 200, { events: store.getAudit(decodeURIComponent(auditPath[1])) });

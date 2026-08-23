@@ -8,8 +8,8 @@
   padding: 3px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: var(--panel, var(--bg));
-  box-shadow: 0 6px 22px rgba(15, 20, 35, .16);
+  background: var(--surface);
+  box-shadow: 0 6px 22px var(--shadow);
 }
 
 .rt-toolbar[hidden], .rt-palette[hidden] { display: none !important; }
@@ -30,7 +30,7 @@
   cursor: pointer;
 }
 
-.rt-toolbar button:hover { background: var(--hover); }
+.rt-toolbar button:hover { background: var(--sidebar-hover); }
 .rt-divider { width: 1px; height: 20px; margin: 0 2px; background: var(--border); }
 .rt-code-label { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; }
 .rt-color-label { font-weight: 650; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
@@ -45,8 +45,8 @@
   padding: 7px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--panel, var(--bg));
-  box-shadow: 0 8px 28px rgba(15, 20, 35, .18);
+  background: var(--surface);
+  box-shadow: 0 8px 28px var(--shadow);
 }
 
 .rt-palette-title {
@@ -76,7 +76,7 @@
   cursor: pointer;
 }
 
-.rt-palette button:hover { background: var(--hover); }
+.rt-palette button:hover { background: var(--sidebar-hover); }
 
 .rt-swatch {
   flex: 0 0 22px;

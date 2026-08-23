@@ -2,13 +2,13 @@
 
 A governed, local-first block workspace desktop app — pages, a block editor, typed databases, and an Electron shell with Notion-fidelity interaction work underway.
 
-## Storage authority
+## Local-first storage
 
-Daxxer no longer persists to the old flat `data/workspace.json` blob. The source of truth is **DaxxerOS Local** (`../DaxxerOS_Local` in development, or the configured `DAXXER_ROOT`) where pages and teamspaces are governed Markdown + YAML frontmatter records indexed into SQLite.
+Daxxer does not persist to the old flat `data/workspace.json` blob. A fresh desktop install now creates a blank, local workspace automatically in Electron's per-user application-data directory. Workspace metadata, each active page, each archived page, and the audit chain are stored separately, so the packaged app works without a repository checkout, Python, or a hidden development dependency.
 
-`lib/store.js` is a compatibility bridge: it shells out to `python -m daxxer.bridge <op>` while preserving the existing server/frontend function signatures. Deletes are recoverable archive operations rather than hard deletes.
+**DaxxerOS Local** is still preferred when present (`../DaxxerOS_Local` in development or an explicit `DAXXER_ROOT`). `lib/store.js` detects it and uses its governed Markdown + YAML / SQLite bridge. Otherwise it uses the built-in local record store. Deletes are recoverable archive operations in either mode.
 
-Requires Python plus `pip install -e .` inside `DaxxerOS_Local`. Run `daxxer index` there after pulling schema-affecting changes before launching the app.
+When using DaxxerOS Local, install its Python bridge with `pip install -e .` and run `daxxer index` after pulling schema-affecting changes.
 
 ## Run the desktop app
 
@@ -25,7 +25,7 @@ npm run package
 # → dist/Daxxer-win32-x64/Daxxer.exe
 ```
 
-The packaged application resolves the governed store separately from the read-only app bundle. Override its location with `DAXXER_ROOT` when needed.
+The packaged application keeps workspace data outside the read-only app bundle. Set `DAXXER_ROOT` only when you want to connect it to a separately installed DaxxerOS Local workspace.
 
 ## Run as a plain web app
 
@@ -76,10 +76,12 @@ See `docs/NOTION_FIDELITY_BUILD.md` for the phased parity program and persistenc
 
 ### Workspace
 
-- Sidebar with teamspaces, nested page tree, favorites, and recents.
+- Blank-first workspace; there is no prefilled demo content on a new install.
+- Crimson Signal visual system with persistent light and dark modes.
+- Sidebar with user-created teamspaces, nested page tree, favorites, and recents.
 - Breadcrumbs, page icons, page titles, favorites.
 - Full-text search across titles, block text, and row titles (`Ctrl/⌘-K`).
-- Create, archive, restore, and nest pages; databases and document pages.
+- Create, duplicate, archive, restore, and nest pages; databases and document pages.
 - Governance, review queue, record history, and archive surfaces.
 
 ## Architecture
@@ -87,7 +89,8 @@ See `docs/NOTION_FIDELITY_BUILD.md` for the phased parity program and persistenc
 ```text
 server.js                 node:http server + JSON API
 lib/
-  store.js                governed DaxxerOS Local bridge
+  store.js                DaxxerOS bridge with embedded local fallback
+  local-store.js          durable per-record local workspace + audit chain
   search.js               workspace search
 public/
   index.html              app shell
@@ -107,7 +110,8 @@ public/
 Core endpoints:
 
 `GET /api/sidebar` · `GET /api/search?q=` · `POST /api/pages` ·
-`GET|PUT|DELETE /api/pages/:id` · `POST /api/pages/:id/favorite` · `POST /api/teamspaces`
+`GET|PUT|DELETE /api/pages/:id` · `POST /api/pages/:id/duplicate` ·
+`POST /api/pages/:id/favorite` · `POST /api/teamspaces`
 
 Governance endpoints:
 

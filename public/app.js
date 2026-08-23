@@ -10,9 +10,32 @@
     return res.json();
   };
 
-  const state = { sidebar: null, currentId: null, expanded: new Set(JSON.parse(localStorage.getItem("dx_expanded") || "[]")) };
+  const state = {
+    sidebar: null,
+    currentId: null,
+    theme: localStorage.getItem("dx_theme") === "dark" ? "dark" : "light",
+    expanded: new Set(JSON.parse(localStorage.getItem("dx_expanded") || "[]")),
+  };
 
   function toast(msg) { const t = $("#toast"); if (!t) return; t.textContent = msg; t.hidden = false; clearTimeout(t._t); t._t = setTimeout(() => (t.hidden = true), 2000); }
+
+  function themeGlyph(theme) {
+    return theme === "dark"
+      ? `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`
+      : `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.6 15.5A8.4 8.4 0 0 1 8.5 3.4 8.4 8.4 0 1 0 20.6 15.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>`;
+  }
+
+  function applyTheme(theme) {
+    state.theme = theme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = state.theme;
+    localStorage.setItem("dx_theme", state.theme);
+    const button = $("#themeBtn");
+    if (!button) return;
+    const next = state.theme === "dark" ? "light" : "dark";
+    button.innerHTML = themeGlyph(state.theme);
+    button.title = `Switch to ${next} theme`;
+    button.setAttribute("aria-label", button.title);
+  }
 
   // ---- Universal overlay/popover dismissal (covers dynamically-created ones) ----
   function closeAllPopovers() { $$(".popover").forEach((p) => (p.hidden = true)); document.querySelectorAll("#optPop").forEach((p) => p.remove()); }
@@ -156,7 +179,12 @@
       const act = it.dataset.act; close();
       if (act === "fav") { await api(`/pages/${page.id}/favorite`, { method: "POST" }); await loadSidebar(); }
       else if (act === "add") { const np = await api("/pages", { method: "POST", body: JSON.stringify({ parentId: page.id, teamspaceId: page.teamspaceId }) }); state.expanded.add(page.id); saveExpanded(); await loadSidebar(); openPage(np.id); }
-      else if (act === "dup") { toast("Duplicate is a demo action"); }
+      else if (act === "dup") {
+        const copy = await api(`/pages/${page.id}/duplicate`, { method: "POST" });
+        await loadSidebar();
+        openPage(copy.id);
+        toast("Duplicate created");
+      }
       else if (act === "del") {
         if (confirm(`Move "${page.title}" and everything inside it to Trash?\n\n`
           + `Nothing is destroyed — the records stay on disk and can be restored from Trash.`)) {
@@ -170,15 +198,41 @@
     setTimeout(() => document.addEventListener("click", onDoc, true), 0);
   }
 
-  // ================= HOME DASHBOARD =================
-  function greeting() {
-    const h = new Date().getHours();
-    if (h < 5) return "Still up";
-    if (h < 12) return "Good morning";
-    if (h < 17) return "Good afternoon";
-    return "Good evening";
+  function openWorkspaceMenu(anchor) {
+    const menu = $("#ctxMenu");
+    const rect = anchor.getBoundingClientRect();
+    menu.innerHTML = `<div class="menu-list">
+      <div class="menu-label">${esc(state.sidebar.workspace.name)}</div>
+      <div class="menu-item" data-act="teamspace">${I().plus}Create teamspace</div>
+      <div class="menu-sep"></div>
+      <div class="menu-item" data-act="theme">${themeGlyph(state.theme)}Use ${state.theme === "dark" ? "light" : "dark"} theme</div>
+    </div>`;
+    menu.hidden = false;
+    menu.style.top = Math.min(rect.bottom + 4, window.innerHeight - 150) + "px";
+    menu.style.left = Math.min(rect.left, window.innerWidth - 230) + "px";
+    const close = () => { menu.hidden = true; document.removeEventListener("click", onDoc, true); };
+    const onDoc = (event) => { if (!menu.contains(event.target)) close(); };
+    menu.querySelectorAll("[data-act]").forEach((item) => (item.onclick = async () => {
+      const action = item.dataset.act;
+      close();
+      if (action === "theme") return applyTheme(state.theme === "dark" ? "light" : "dark");
+      return createTeamspace();
+    }));
+    setTimeout(() => document.addEventListener("click", onDoc, true), 0);
   }
 
+  async function createTeamspace() {
+    const name = prompt("Name this teamspace");
+    if (name == null || !name.trim()) return;
+    const icon = prompt("Choose an icon (optional)", "📁");
+    const teamspace = await api("/teamspaces", { method: "POST", body: JSON.stringify({ name, icon: icon || "📁" }) });
+    state.expanded.add(teamspace.id);
+    saveExpanded();
+    await loadSidebar();
+    toast("Teamspace created");
+  }
+
+  // ================= HOME DASHBOARD =================
   // ---- Governance surfaces (Review queue / Trash) ----
   // Both reset the same topbar chrome a page would own, so navigating between
   // a page and a governance view never leaves a stale breadcrumb or gate badge.
@@ -234,39 +288,44 @@
 
     const wrap = document.createElement("div");
     wrap.className = "home-view";
-    const user = state.sidebar.workspace.user;
     const now = new Date();
     const dateStr = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
     // Hero
     const hero = document.createElement("div");
     hero.className = "home-hero";
-    hero.innerHTML = `
+    const hasPages = state.sidebar.pages.length > 0;
+    hero.innerHTML = hasPages ? `
       <div class="home-date">${esc(dateStr)}</div>
-      <h1 class="home-greet">${esc(greeting())}, ${esc(user.name)}</h1>
+      <h1 class="home-greet">Your workspace</h1>
+      <p class="workspace-note">A flexible canvas for the pages, databases, and systems you choose to create.</p>
+    ` : `
+      <div class="home-date">PRIVATE WORKSPACE</div>
+      <h1 class="home-greet">Start with a blank canvas.</h1>
+      <p class="workspace-note">There is no prefilled demo content here. Add pages, databases, and teamspaces only when they fit the way you work.</p>
     `;
     wrap.appendChild(hero);
 
     // Quick actions
     const qa = document.createElement("div");
     qa.className = "home-quick";
+    const firstDatabase = state.sidebar.pages.find((page) => page.type === "database");
     qa.innerHTML = `
       <button class="home-quick-btn" data-act="new">${I().plus}<span>New page</span></button>
       <button class="home-quick-btn" data-act="search">${I().text}<span>Search</span></button>
-      <button class="home-quick-btn" data-act="db">${I().database}<span>Open catalog</span></button>
+      <button class="home-quick-btn" data-act="db">${I().database}<span>${firstDatabase ? "Open database" : "New database"}</span></button>
+      ${state.sidebar.teamspaces.length ? "" : `<button class="home-quick-btn" data-act="teamspace">${I().plus}<span>Create teamspace</span></button>`}
     `;
     wrap.appendChild(qa);
 
     // Recents
-    const rec = document.createElement("section");
-    rec.className = "home-section";
-    rec.innerHTML = `<div class="home-section-title">Recently visited</div>`;
-    const recGrid = document.createElement("div");
-    recGrid.className = "home-cards";
     const recents = (state.sidebar.recents || []).slice(0, 6);
-    if (recents.length === 0) {
-      recGrid.innerHTML = `<div class="home-empty">No recent pages yet.</div>`;
-    } else {
+    if (recents.length) {
+      const rec = document.createElement("section");
+      rec.className = "home-section";
+      rec.innerHTML = `<div class="home-section-title">Recently visited</div>`;
+      const recGrid = document.createElement("div");
+      recGrid.className = "home-cards";
       recents.forEach((r) => {
         const card = document.createElement("button");
         card.className = "home-card";
@@ -274,9 +333,9 @@
         card.onclick = () => openPage(r.id);
         recGrid.appendChild(card);
       });
+      rec.appendChild(recGrid);
+      wrap.appendChild(rec);
     }
-    rec.appendChild(recGrid);
-    wrap.appendChild(rec);
 
     // Favorites
     const favs = (state.sidebar.favorites || []).map((id) => state.sidebar.pages.find((p) => p.id === id)).filter(Boolean);
@@ -299,8 +358,11 @@
     // Teamspaces overview
     const ts = document.createElement("section");
     ts.className = "home-section";
-    ts.innerHTML = `<div class="home-section-title">Your teamspaces</div>`;
+    ts.innerHTML = `<div class="home-section-title">Teamspaces</div>`;
     const tsGrid = document.createElement("div"); tsGrid.className = "home-cards";
+    if (!state.sidebar.teamspaces.length) {
+      tsGrid.innerHTML = `<div class="home-empty">No teamspaces yet. Create one only when you need a distinct, named area of work.</div>`;
+    }
     state.sidebar.teamspaces.forEach((t) => {
       const count = state.sidebar.pages.filter((p) => p.teamspaceId === t.id).length;
       const card = document.createElement("button");
@@ -325,10 +387,13 @@
       await loadSidebar(); openPage(np.id);
     };
     qa.querySelector('[data-act="search"]').onclick = openSearch;
-    qa.querySelector('[data-act="db"]').onclick = () => {
-      const db = state.sidebar.pages.find((p) => p.type === "database");
-      if (db) openPage(db.id);
+    qa.querySelector('[data-act="db"]').onclick = async () => {
+      if (firstDatabase) return openPage(firstDatabase.id);
+      const db = await api("/pages", { method: "POST", body: JSON.stringify({ type: "database", title: "Untitled database" }) });
+      await loadSidebar();
+      openPage(db.id);
     };
+    qa.querySelector('[data-act="teamspace"]')?.addEventListener("click", createTeamspace);
 
     renderSidebar();
   }
@@ -479,7 +544,8 @@
     };
     $("#collapseBtn").onclick = () => { $("#sidebar").classList.add("collapsed"); $("#expandBtn").hidden = false; };
     $("#expandBtn").onclick = () => { $("#sidebar").classList.remove("collapsed"); $("#expandBtn").hidden = true; };
-    $("#wsSwitcher").onclick = () => toast("Workspace: Daxxer");
+    $("#themeBtn").onclick = () => applyTheme(state.theme === "dark" ? "light" : "dark");
+    $("#wsSwitcher").onclick = (event) => openWorkspaceMenu(event.currentTarget);
 
     // ANY click on an overlay backdrop closes it. Modal content stops propagation itself if needed.
     $$(".overlay").forEach((o) => o.addEventListener("click", (e) => { if (e.target === o) closeAllOverlays(); }));
@@ -566,6 +632,7 @@
     setTimeout(() => {
       $$(".overlay, .popover").forEach((el) => { el.style.display = ""; });
     }, 0);
+    applyTheme(state.theme);
     wire();
     await loadSidebar();
     refreshReviewCount();

@@ -541,7 +541,7 @@ window.Daxxer = window.Daxxer || {};
       const menu = document.getElementById("ctxMenu");
       const rect = anchor.getBoundingClientRect();
       const colorRow = block.type === "callout"
-        ? `<div class="menu-swatches">${["blue","orange","green","red","gray"].map((c) => `<div class="menu-swatch" data-color="${c}" style="background:${Daxxer.SWATCH[c] || "#eee"}"></div>`).join("")}</div><div class="menu-sep"></div>`
+        ? `<div class="menu-swatches">${["blue","red","gray"].map((c) => `<div class="menu-swatch" data-color="${c}" style="background:${Daxxer.SWATCH[c] || "var(--sidebar)"}"></div>`).join("")}</div><div class="menu-sep"></div>`
         : "";
       menu.innerHTML = `<div class="menu-list">
         <div class="menu-item" data-act="dup">${I().duplicate}Duplicate</div>

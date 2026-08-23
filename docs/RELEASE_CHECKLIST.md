@@ -14,7 +14,7 @@
 
 1. Launch packaged app from outside the repository checkout.
 2. Create a page, rich-text marks, toggle heading, simple table, and database; close and reopen; content survives.
-3. Restart the app; Daxxer locates the same per-user DaxxerOS Local data without a development path dependency.
+3. Restart the app; Daxxer locates the same per-user local workspace without a development path dependency. When `DAXXER_ROOT` is configured, verify the DaxxerOS Local bridge is selected intentionally.
 4. Open one database in Table, Board, List, Calendar, and Gallery; all views show the same stable row IDs/source data.
 5. Apply view-local search, filter, multi-sort, and property visibility; switching views does not duplicate or rewrite source rows.
 6. Drag a Calendar item; only the configured date/date-range property changes.

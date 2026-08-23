@@ -6,27 +6,15 @@ window.Daxxer = window.Daxxer || {};
 (function () {
   const COLORS = [
     ["Default", "var(--text)"],
-    ["Gray", "#787774"],
-    ["Brown", "#9f6b53"],
-    ["Orange", "#d9730d"],
-    ["Yellow", "#cb912f"],
-    ["Green", "#448361"],
-    ["Blue", "#337ea9"],
-    ["Purple", "#9065b0"],
-    ["Pink", "#c14c8a"],
-    ["Red", "#d44c47"],
+    ["Muted", "var(--text-dim)"],
+    ["Crimson", "var(--blue)"],
+    ["Deep crimson", "var(--blue-600)"],
   ];
   const BACKGROUNDS = [
     ["None", "transparent"],
-    ["Gray", "rgba(120,119,116,.16)"],
-    ["Brown", "rgba(159,107,83,.16)"],
-    ["Orange", "rgba(217,115,13,.16)"],
-    ["Yellow", "rgba(203,145,47,.18)"],
-    ["Green", "rgba(68,131,97,.16)"],
-    ["Blue", "rgba(51,126,169,.16)"],
-    ["Purple", "rgba(144,101,176,.16)"],
-    ["Pink", "rgba(193,76,138,.16)"],
-    ["Red", "rgba(212,76,71,.16)"],
+    ["Warm canvas", "var(--sidebar)"],
+    ["Crimson tint", "var(--blue-soft)"],
+    ["Deep crimson", "var(--blue-softer)"],
   ];
 
   let toolbar = null;
