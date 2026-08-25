@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "1.0",
+  "title": "Daxxer repository graph validation receipt",
+  "retrievedAt": "2026-08-25T00:00:00.000Z",
+  "source": {
+    "repository": "dburt-proex/Daxxer",
+    "api": "https://api.github.com/repos/dburt-proex/Daxxer",
+    "defaultBranch": "main",
+    "treeSha": "ded64c02e7ae9b352a54a5f16d0033a96cf98e5c"
+  },
+  "verification": {
+    "repositoryExists": true,
+    "visibility": "public",
+    "pushedAt": "2026-08-24T23:18:55Z",
+    "rootEntriesObserved": [
+      "ECOSYSTEM.json",
+      "README.md",
+      "docs/",
+      "electron/",
+      "lib/",
+      "public/",
+      "server.js",
+      "tests/",
+      "package.json"
+    ],
+    "limitations": [
+      "This receipt validates the repository structure read through GitHub. The local runtime event ledger is created only when Daxxer starts and an operator invokes the read-only scan endpoint."
+    ]
+  },
+  "nodes": [
+    {
+      "id": "daxxer",
+      "kind": "repository",
+      "role": "local-first governed workspace",
+      "evidence": "github_read",
+      "confidence": 1
+    },
+    {
+      "id": "electron-shell",
+      "kind": "runtime",
+      "role": "sandboxed desktop shell",
+      "evidence": "electron/main.cjs",
+      "confidence": 1
+    },
+    {
+      "id": "local-server",
+      "kind": "runtime",
+      "role": "loopback-only API and host event boundary",
+      "evidence": "server.js",
+      "confidence": 1
+    },
+    {
+      "id": "event-spine",
+      "kind": "module",
+      "role": "append-only ledger and read-only adapter gateway",
+      "evidence": "lib/event-spine.js",
+      "confidence": 1
+    },
+    {
+      "id": "workspace-store",
+      "kind": "module",
+      "role": "local workspace persistence",
+      "evidence": "lib/store.js",
+      "confidence": 1
+    },
+    {
+      "id": "client-surface",
+      "kind": "runtime",
+      "role": "local browser workspace and governance surface",
+      "evidence": "public/",
+      "confidence": 1
+    }
+  ],
+  "edges": [
+    {
+      "from": "electron-shell",
+      "to": "local-server",
+      "relation": "boots"
+    },
+    {
+      "from": "local-server",
+      "to": "workspace-store",
+      "relation": "persists_workspace_through"
+    },
+    {
+      "from": "local-server",
+      "to": "event-spine",
+      "relation": "records_host_events_through"
+    },
+    {
+      "from": "local-server",
+      "to": "client-surface",
+      "relation": "serves"
+    },
+    {
+      "from": "event-spine",
+      "to": "daxxer",
+      "relation": "observes_read_only_github_metadata_for"
+    }
+  ]
+}
