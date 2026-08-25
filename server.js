@@ -8,10 +8,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import * as store from "./lib/store.js";
 import { search } from "./lib/search.js";
+import { createEventSpine } from "./lib/event-spine.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "public");
 const PORT = process.env.PORT || 4400;
+const eventSpine = createEventSpine({ dataDir: process.env.DAXXER_DATA_DIR || join(__dirname, "data") });
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -54,12 +56,28 @@ async function handleApi(req, res, url) {
   try {
     if (pathname === "/api/sidebar" && method === "GET") return sendJSON(res, 200, store.getSidebar());
 
-    if (pathname === "/api/search" && method === "GET")
-      return sendJSON(res, 200, { results: search(searchParams.get("q") || "") });
+    if (pathname === "/api/search" && method === "GET") {
+      const query = searchParams.get("q") || "";
+      const results = search(query);
+      await eventSpine.recordWorkspaceEvent("search.query_observed", { queryLength: query.length, resultCount: results.length });
+      return sendJSON(res, 200, { results });
+    }
 
     // ---- Governance surface (no equivalent in the pre-DaxxerOS store) ----
     if (pathname === "/api/governance" && method === "GET")
       return sendJSON(res, 200, store.getGovernance());
+
+    if (pathname === "/api/event-spine/status" && method === "GET")
+      return sendJSON(res, 200, eventSpine.status());
+
+    if (pathname === "/api/event-spine/graph" && method === "GET")
+      return sendJSON(res, 200, eventSpine.graph());
+
+    if (pathname === "/api/event-spine/github/scan" && method === "POST") {
+      const body = await readBody(req);
+      const result = await eventSpine.scanGitHubRepository(body.repository || "dburt-proex/Daxxer");
+      return sendJSON(res, 201, { receipt: result.receipt, records: result.records.length, checkpoint: result.checkpoint });
+    }
 
     if (pathname === "/api/archived" && method === "GET")
       return sendJSON(res, 200, { items: store.listArchived() });
@@ -74,7 +92,9 @@ async function handleApi(req, res, url) {
 
     if (pathname === "/api/pages" && method === "POST") {
       const body = await readBody(req);
-      return sendJSON(res, 201, store.createPage(body));
+      const page = store.createPage(body);
+      await eventSpine.recordWorkspaceEvent("notes.page_created", { pageId: page?.id, title: page?.title, type: page?.type });
+      return sendJSON(res, 201, page);
     }
 
     const m = pathname.match(/^\/api\/pages\/([^/]+)$/);
@@ -89,9 +109,14 @@ async function handleApi(req, res, url) {
       if (method === "PUT" || method === "PATCH") {
         const body = await readBody(req);
         const p = store.updatePage(id, body);
+        if (p) await eventSpine.recordWorkspaceEvent("notes.page_updated", { pageId: p.id, title: p.title, type: p.type });
         return sendJSON(res, p ? 200 : 404, p || { error: "not found" });
       }
-      if (method === "DELETE") return sendJSON(res, 200, { ok: store.deletePage(id) });
+      if (method === "DELETE") {
+        const ok = store.deletePage(id);
+        await eventSpine.recordWorkspaceEvent("notes.page_archived", { pageId: id, ok });
+        return sendJSON(res, 200, { ok });
+      }
     }
 
     const fav = pathname.match(/^\/api\/pages\/([^/]+)\/favorite$/);
@@ -108,7 +133,8 @@ async function handleApi(req, res, url) {
   }
 }
 
-export function startServer(port = PORT) {
+export async function startServer(port = PORT) {
+  await eventSpine.load();
   return new Promise((resolve) => {
     const server = createServer(async (req, res) => {
       const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
