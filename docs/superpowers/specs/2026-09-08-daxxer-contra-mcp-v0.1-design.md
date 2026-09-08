@@ -28,7 +28,7 @@ The service MUST NOT perform writes to Contra, GitHub, Notion, Airtable, Daxxer,
 
 ### Selected approach: standalone MCP gateway
 
-`Contra Co-Agent -> HTTPS -> daxer-contra-mcp /mcp -> bounded read-only tools`
+`Contra Co-Agent -> HTTPS -> daxxer-contra-mcp /mcp -> bounded read-only tools`
 
 The service is intentionally separated from Daxxer's existing local-first Node/Electron runtime. Daxxer remains local-first and is not made internet-facing for this proof.
 
