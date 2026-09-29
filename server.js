@@ -9,11 +9,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import * as store from "./lib/store.js";
 import { search } from "./lib/search.js";
 import { createEventSpine } from "./lib/event-spine.js";
+import { createFlowRuntime } from "./lib/flow-runtime.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "public");
 const PORT = process.env.PORT || 4400;
-const eventSpine = createEventSpine({ dataDir: process.env.DAXXER_DATA_DIR || join(__dirname, "data") });
+const dataDir = process.env.DAXXER_DATA_DIR || join(__dirname, "data");
+const eventSpine = createEventSpine({ dataDir });
+const flowRuntime = createFlowRuntime({ dataDir, eventSpine });
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
@@ -77,6 +80,29 @@ async function handleApi(req, res, url) {
       const body = await readBody(req);
       const result = await eventSpine.scanGitHubRepository(body.repository || "dburt-proex/Daxxer");
       return sendJSON(res, 201, { receipt: result.receipt, records: result.records.length, checkpoint: result.checkpoint });
+    }
+
+    // ---- DAXXER Flow v0.1 executable spine ----
+    if (pathname === "/api/flow/workflow" && method === "GET")
+      return sendJSON(res, 200, flowRuntime.workflowDefinition());
+
+    if (pathname === "/api/flow/runs" && method === "POST") {
+      const body = await readBody(req);
+      const run = await flowRuntime.start(body.input ?? body);
+      return sendJSON(res, 201, run);
+    }
+
+    const flowRun = pathname.match(/^\/api\/flow\/runs\/([^/]+)$/);
+    if (flowRun && method === "GET") {
+      const run = await flowRuntime.getRun(decodeURIComponent(flowRun[1]));
+      return sendJSON(res, run ? 200 : 404, run || { error: "flow run not found" });
+    }
+
+    const flowApproval = pathname.match(/^\/api\/flow\/runs\/([^/]+)\/approval$/);
+    if (flowApproval && method === "POST") {
+      const body = await readBody(req);
+      const run = await flowRuntime.resolveApproval(decodeURIComponent(flowApproval[1]), body.decision);
+      return sendJSON(res, 200, run);
     }
 
     if (pathname === "/api/archived" && method === "GET")
