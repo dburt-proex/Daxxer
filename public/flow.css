@@ -321,8 +321,104 @@ pre {
   font-size: 12px;
 }
 
+
+.workflow-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.save-state {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.save-state.dirty { color: var(--warning); }
+
+.node-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 3px;
+}
+
+.node-config-summary {
+  color: var(--muted);
+  font: 10px "SFMono-Regular", Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-editor {
+  min-height: 76px;
+  padding: 12px;
+  background: #0e0f13;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.config-empty {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.config-field {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.config-field + .config-field { margin-top: 9px; }
+
+.config-field > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.config-field input,
+.config-field select {
+  min-width: 0;
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  outline: none;
+}
+
+.config-field input:focus,
+.config-field select:focus {
+  border-color: var(--lavender-strong);
+}
+
+.config-field select:disabled {
+  opacity: .7;
+  cursor: not-allowed;
+}
+
 @media (max-width: 900px) {
   .flow-shell { grid-template-columns: 1fr; }
   .inspector-panel { position: static; }
   .flow-header { padding: 22px 18px 16px; }
+  .panel-head { align-items: flex-start; }
+  .workflow-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 560px) {
+  .panel-head { display: block; }
+  .workflow-actions { margin-top: 12px; }
+  .workflow-actions .primary,
+  .workflow-actions .secondary { flex: 1 1 auto; }
+  .save-state { width: 100%; }
+  .config-field { grid-template-columns: 1fr; gap: 5px; }
 }
