@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DAXXER Flow v0.1</title>
+    <link rel="stylesheet" href="/flow.css" />
+  </head>
+  <body>
+    <header class="flow-header">
+      <div>
+        <a class="eyebrow" href="/">DAXXER</a>
+        <h1>Flow <span>v0.1</span></h1>
+        <p>Governed automation spine: build evidence before integrations.</p>
+      </div>
+      <a class="workspace-link" href="/">Workspace</a>
+    </header>
+
+    <main class="flow-shell">
+      <section class="panel canvas-panel">
+        <div class="panel-head">
+          <div>
+            <span class="kicker">Executable spine</span>
+            <h2>Manual → Transform → IF → Approval → Receipt</h2>
+          </div>
+          <button id="runButton" class="primary">Run workflow</button>
+        </div>
+
+        <label class="input-label" for="runInput">Manual trigger input</label>
+        <textarea id="runInput" spellcheck="false">{
+  "company": "Acme",
+  "score": 85
+}</textarea>
+        <div id="flowCanvas" class="flow-canvas" aria-label="DAXXER Flow canvas"></div>
+      </section>
+
+      <aside class="panel inspector-panel">
+        <div class="panel-head compact">
+          <div>
+            <span class="kicker">Execution</span>
+            <h2 id="runStatus">Not started</h2>
+          </div>
+          <span id="runId" class="run-id">—</span>
+        </div>
+
+        <div id="approvalPanel" class="approval-panel" hidden>
+          <div class="gate review">REVIEW</div>
+          <h3>Human approval required</h3>
+          <p>The runtime is paused. Approval is bound to the exact proposed action.</p>
+          <div class="approval-actions">
+            <button id="rejectButton" class="secondary danger">Reject</button>
+            <button id="approveButton" class="primary">Approve exact action</button>
+          </div>
+        </div>
+
+        <div class="detail-block">
+          <div class="detail-title">Selected node</div>
+          <pre id="nodeDetail">Select a node to inspect its gate, input, output, and evidence refs.</pre>
+        </div>
+
+        <div class="detail-block">
+          <div class="detail-title">Execution receipt</div>
+          <pre id="receiptDetail">No receipt yet.</pre>
+        </div>
+      </aside>
+    </main>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="/flow.js"></script>
+  </body>
+</html>
