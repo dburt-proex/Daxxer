@@ -57,7 +57,7 @@ input, textarea { font-family: inherit; }
 .chev { width: 14px; height: 14px; color: var(--text-mute); margin-left: auto; }
 
 .sb-actions { padding: 2px 8px 6px; }
-.sb-link { display: flex; align-items: center; gap: 9px; width: 100%; padding: 6px 8px; border-radius: 6px; color: var(--text-dim); font-size: 14px; text-align: left; }
+.sb-link { display: flex; align-items: center; gap: 9px; width: 100%; padding: 6px 8px; border-radius: 6px; color: var(--text-dim); font-size: 14px; text-align: left; text-decoration: none; }
 .sb-link svg { width: 18px; height: 18px; }
 .sb-link:hover { background: var(--sidebar-hover); color: var(--text); }
 
