@@ -109,6 +109,93 @@ test("invalid transform input fails closed with an execution receipt", async () 
 
   assert.equal(completed.status, "FAILED");
   assert.equal(completed.nodes.transform.status, "FAILED");
-  assert.equal(completed.receipt.terminalReason, "transform_invalid_score");
+  assert.equal(completed.receipt.terminalReason, "transform_invalid_number");
   assert.equal(completed.nodes.receipt.status, "SUCCEEDED");
+});
+
+
+test("workflow configuration saves atomically and reloads across runtime instances", async () => {
+  const { dataDir, runtime } = await harness();
+  const workflow = await runtime.workflowDefinition();
+  workflow.nodes.find((node) => node.id === "transform").config.field = "risk_score";
+  const condition = workflow.nodes.find((node) => node.id === "if");
+  condition.config.field = "risk_score";
+  condition.config.operator = ">=";
+  condition.config.value = 90;
+
+  const saved = await runtime.saveWorkflow(workflow);
+  assert.equal(saved.version, 2);
+  assert.equal(saved.nodes.find((node) => node.id === "transform").config.field, "risk_score");
+  assert.equal(saved.nodes.find((node) => node.id === "if").config.value, 90);
+
+  const restarted = createFlowRuntime({ dataDir });
+  const loaded = await restarted.workflowDefinition();
+  assert.deepEqual(loaded, saved);
+});
+
+test("saved workflow configuration controls later execution", async () => {
+  const { runtime } = await harness();
+  const workflow = await runtime.workflowDefinition();
+  workflow.nodes.find((node) => node.id === "transform").config.field = "risk_score";
+  const condition = workflow.nodes.find((node) => node.id === "if");
+  condition.config.field = "risk_score";
+  condition.config.operator = ">=";
+  condition.config.value = 90;
+  await runtime.saveWorkflow(workflow);
+
+  const review = await runtime.start({ risk_score: "95" });
+  assert.equal(review.status, "REVIEW");
+  assert.equal(review.workflowVersion, 2);
+  assert.equal(review.nodes.transform.output.risk_score, 95);
+  assert.equal(review.nodes.if.output.expected, 90);
+
+  const halted = await runtime.start({ risk_score: 85 });
+  assert.equal(halted.status, "HALTED");
+  assert.equal(halted.nodes.if.gate.decision, "HALT");
+});
+
+test("workflow save rejects topology or type expansion", async () => {
+  const { runtime } = await harness();
+  const workflow = await runtime.workflowDefinition();
+  workflow.nodes.push({ id: "http", type: "http", label: "HTTP", config: {} });
+  await assert.rejects(() => runtime.saveWorkflow(workflow), /fixed five-node spine/);
+
+  const changedType = await runtime.workflowDefinition();
+  changedType.nodes.find((node) => node.id === "if").type = "agent";
+  await assert.rejects(() => runtime.saveWorkflow(changedType), /ids and types are fixed/);
+
+  const changedEdges = await runtime.workflowDefinition();
+  changedEdges.edges[0] = { from: "manual", to: "if" };
+  await assert.rejects(() => runtime.saveWorkflow(changedEdges), /topology is fixed/);
+});
+
+test("workflow save validates editable node configuration", async () => {
+  const { runtime } = await harness();
+  const workflow = await runtime.workflowDefinition();
+  workflow.nodes.find((node) => node.id === "if").config.operator = "contains";
+  await assert.rejects(() => runtime.saveWorkflow(workflow), /Unsupported IF operator/);
+
+  const invalidField = await runtime.workflowDefinition();
+  invalidField.nodes.find((node) => node.id === "transform").config.field = "bad field name";
+  await assert.rejects(() => runtime.saveWorkflow(invalidField), /simple field name/);
+
+  const invalidBinding = await runtime.workflowDefinition();
+  invalidBinding.nodes.find((node) => node.id === "approval").config.binding = "loose";
+  await assert.rejects(() => runtime.saveWorkflow(invalidBinding), /exact_action/);
+});
+
+test("an in-flight REVIEW run keeps its saved workflow snapshot after later edits", async () => {
+  const { runtime } = await harness();
+  const pending = await runtime.start({ score: 85 });
+  assert.equal(pending.workflowVersion, 1);
+
+  const workflow = await runtime.workflowDefinition();
+  workflow.nodes.find((node) => node.id === "if").config.value = 95;
+  const saved = await runtime.saveWorkflow(workflow);
+  assert.equal(saved.version, 2);
+
+  const completed = await runtime.resolveApproval(pending.id, "approve");
+  assert.equal(completed.status, "SUCCEEDED");
+  assert.equal(completed.workflowVersion, 1);
+  assert.equal(completed.receipt.workflowVersion, 1);
 });
