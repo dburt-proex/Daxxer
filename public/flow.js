@@ -246,6 +246,7 @@
   }
 
   async function loadWorkflow({ notify = false } = {}) {
+    if (notify && currentRun?.status === "REVIEW") throw new Error("Resolve the current approval before reloading the saved workflow.");
     reloadButton.disabled = true;
     try {
       workflow = await api("/api/flow/workflow");
