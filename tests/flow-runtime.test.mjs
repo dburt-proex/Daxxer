@@ -89,6 +89,20 @@ test("tampering with a persisted proposed action invalidates the approval bindin
   );
 });
 
+test("tampering with persisted context also invalidates the approval binding", async () => {
+  const { dataDir, runtime } = await harness();
+  const pending = await runtime.start({ score: 88, company: "Acme" });
+  const runPath = join(dataDir, "flow", "runs", pending.id + ".json");
+  const persisted = JSON.parse(await readFile(runPath, "utf8"));
+  persisted.context.score = 99;
+  await writeFile(runPath, JSON.stringify(persisted, null, 2), "utf8");
+
+  await assert.rejects(
+    () => runtime.resolveApproval(pending.id, "approve"),
+    /Approval binding mismatch/
+  );
+});
+
 test("invalid transform input fails closed with an execution receipt", async () => {
   const { runtime } = await harness();
   const completed = await runtime.start({ score: "not-a-number" });
