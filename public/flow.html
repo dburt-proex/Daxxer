@@ -3,15 +3,15 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DAXXER Flow v0.1</title>
+    <title>DAXXER Flow v0.2</title>
     <link rel="stylesheet" href="/flow.css" />
   </head>
   <body>
     <header class="flow-header">
       <div>
         <a class="eyebrow" href="/">DAXXER</a>
-        <h1>Flow <span>v0.1</span></h1>
-        <p>Governed automation spine: build evidence before integrations.</p>
+        <h1>Flow <span>v0.2</span></h1>
+        <p>Governed automation spine with persisted deterministic configuration.</p>
       </div>
       <a class="workspace-link" href="/">Workspace</a>
     </header>
@@ -23,7 +23,12 @@
             <span class="kicker">Executable spine</span>
             <h2>Manual → Transform → IF → Approval → Receipt</h2>
           </div>
-          <button id="runButton" class="primary">Run workflow</button>
+          <div class="workflow-actions">
+            <span id="saveState" class="save-state">Loading…</span>
+            <button id="reloadButton" class="secondary">Reload saved</button>
+            <button id="saveButton" class="secondary" disabled>Save workflow</button>
+            <button id="runButton" class="primary">Run workflow</button>
+          </div>
         </div>
 
         <label class="input-label" for="runInput">Manual trigger input</label>
@@ -46,7 +51,7 @@
         <div id="approvalPanel" class="approval-panel" hidden>
           <div class="gate review">REVIEW</div>
           <h3>Human approval required</h3>
-          <p>The runtime is paused. Approval is bound to the exact proposed action.</p>
+          <p>The runtime is paused. Approval is bound to the exact proposed action and workflow version.</p>
           <div class="approval-actions">
             <button id="rejectButton" class="secondary danger">Reject</button>
             <button id="approveButton" class="primary">Approve exact action</button>
@@ -54,7 +59,14 @@
         </div>
 
         <div class="detail-block">
-          <div class="detail-title">Selected node</div>
+          <div class="detail-title">Node configuration</div>
+          <div id="configEditor" class="config-editor">
+            <div class="config-empty">Select a node to edit its deterministic configuration.</div>
+          </div>
+        </div>
+
+        <div class="detail-block">
+          <div class="detail-title">Selected node execution</div>
           <pre id="nodeDetail">Select a node to inspect its gate, input, output, and evidence refs.</pre>
         </div>
 

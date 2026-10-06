@@ -2,12 +2,16 @@
   const byId = (id) => document.getElementById(id);
   const canvas = byId("flowCanvas");
   const runButton = byId("runButton");
+  const saveButton = byId("saveButton");
+  const reloadButton = byId("reloadButton");
+  const saveState = byId("saveState");
   const input = byId("runInput");
   const runStatus = byId("runStatus");
   const runId = byId("runId");
   const approvalPanel = byId("approvalPanel");
   const approveButton = byId("approveButton");
   const rejectButton = byId("rejectButton");
+  const configEditor = byId("configEditor");
   const nodeDetail = byId("nodeDetail");
   const receiptDetail = byId("receiptDetail");
   const toast = byId("toast");
@@ -15,6 +19,7 @@
   let workflow = null;
   let currentRun = null;
   let selectedNodeId = null;
+  let dirty = false;
 
   async function api(path, options = {}) {
     const response = await fetch(path, {
@@ -31,6 +36,22 @@
     toast.hidden = false;
     clearTimeout(showToast.timer);
     showToast.timer = setTimeout(() => { toast.hidden = true; }, 3000);
+  }
+
+  function markDirty() {
+    dirty = true;
+    saveState.textContent = "Unsaved changes";
+    saveState.classList.add("dirty");
+    saveButton.disabled = false;
+    runButton.disabled = true;
+  }
+
+  function markSaved() {
+    dirty = false;
+    saveState.textContent = workflow ? "Saved v" + workflow.version : "Saved";
+    saveState.classList.remove("dirty");
+    saveButton.disabled = true;
+    runButton.disabled = false;
   }
 
   function gateClass(nodeResult) {
@@ -66,17 +87,25 @@
       badge.textContent = result?.gate?.resolution || result?.gate?.decision || result?.status || "IDLE";
       top.append(title, badge);
 
-      const type = document.createElement("div");
+      const meta = document.createElement("div");
+      meta.className = "node-meta";
+      const type = document.createElement("span");
       type.className = "node-type";
       type.textContent = node.type;
+      const config = document.createElement("span");
+      config.className = "node-config-summary";
+      if (node.id === "transform") config.textContent = node.config.field + " → " + node.config.cast;
+      if (node.id === "if") config.textContent = node.config.field + " " + node.config.operator + " " + node.config.value;
+      if (node.id === "approval") config.textContent = node.config.binding;
+      meta.append(type);
+      if (config.textContent) meta.append(config);
 
-      button.append(top, type);
+      button.append(top, meta);
       button.addEventListener("click", () => {
         selectedNodeId = node.id;
         renderCanvas();
         renderSelectedNode();
       });
-
       step.append(button);
 
       if (node.id === "if") {
@@ -95,13 +124,102 @@
     });
   }
 
+  function addField(label, control) {
+    const wrapper = document.createElement("label");
+    wrapper.className = "config-field";
+    const title = document.createElement("span");
+    title.textContent = label;
+    wrapper.append(title, control);
+    configEditor.append(wrapper);
+  }
+
+  function textInput(value, onChange) {
+    const control = document.createElement("input");
+    control.type = "text";
+    control.value = value;
+    control.addEventListener("input", () => onChange(control.value));
+    return control;
+  }
+
+  function numberInput(value, onChange) {
+    const control = document.createElement("input");
+    control.type = "number";
+    control.step = "any";
+    control.value = value;
+    control.addEventListener("input", () => onChange(control.value));
+    return control;
+  }
+
+  function selectInput(value, options, onChange, disabled = false) {
+    const control = document.createElement("select");
+    options.forEach((optionValue) => {
+      const option = document.createElement("option");
+      option.value = optionValue;
+      option.textContent = optionValue;
+      option.selected = optionValue === value;
+      control.append(option);
+    });
+    control.disabled = disabled;
+    control.addEventListener("change", () => onChange(control.value));
+    return control;
+  }
+
+  function renderConfigEditor(definition) {
+    configEditor.innerHTML = "";
+    if (!definition) {
+      const empty = document.createElement("div");
+      empty.className = "config-empty";
+      empty.textContent = "Select a node to edit its deterministic configuration.";
+      configEditor.append(empty);
+      return;
+    }
+
+    if (definition.id === "transform") {
+      addField("Source field", textInput(definition.config.field, (value) => {
+        definition.config.field = value;
+        markDirty();
+        renderCanvas();
+      }));
+      addField("Cast", selectInput(definition.config.cast, ["number"], () => {}, true));
+      return;
+    }
+
+    if (definition.id === "if") {
+      addField("Field", textInput(definition.config.field, (value) => {
+        definition.config.field = value;
+        markDirty();
+        renderCanvas();
+      }));
+      addField("Operator", selectInput(definition.config.operator, [">=", ">", "<=", "<", "==", "!="], (value) => {
+        definition.config.operator = value;
+        markDirty();
+        renderCanvas();
+      }));
+      addField("Value", numberInput(definition.config.value, (value) => {
+        definition.config.value = value === "" ? "" : Number(value);
+        markDirty();
+        renderCanvas();
+      }));
+      return;
+    }
+
+    const locked = document.createElement("div");
+    locked.className = "config-empty";
+    locked.textContent = definition.id === "approval"
+      ? "Approval binding is locked to exact_action in v0.2."
+      : "This node has no editable configuration in v0.2.";
+    configEditor.append(locked);
+  }
+
   function renderSelectedNode() {
     if (!selectedNodeId || !workflow) {
+      renderConfigEditor(null);
       nodeDetail.textContent = "Select a node to inspect its gate, input, output, and evidence refs.";
       return;
     }
     const definition = workflow.nodes.find((node) => node.id === selectedNodeId);
     const result = currentRun?.nodes?.[selectedNodeId] || null;
+    renderConfigEditor(definition);
     nodeDetail.textContent = JSON.stringify({ definition, result }, null, 2);
   }
 
@@ -116,7 +234,7 @@
       return;
     }
 
-    runStatus.textContent = currentRun.status;
+    runStatus.textContent = currentRun.status + " · workflow v" + currentRun.workflowVersion;
     runId.textContent = currentRun.id;
     runId.title = currentRun.id;
     approvalPanel.hidden = currentRun.status !== "REVIEW";
@@ -127,7 +245,48 @@
     renderSelectedNode();
   }
 
+  async function loadWorkflow({ notify = false } = {}) {
+    if (notify && currentRun?.status === "REVIEW") throw new Error("Resolve the current approval before reloading the saved workflow.");
+    reloadButton.disabled = true;
+    try {
+      workflow = await api("/api/flow/workflow");
+      currentRun = null;
+      if (!workflow.nodes.some((node) => node.id === selectedNodeId)) selectedNodeId = "transform";
+      markSaved();
+      renderRun();
+      if (notify) showToast("Reloaded saved workflow v" + workflow.version + ".");
+    } finally {
+      reloadButton.disabled = false;
+    }
+  }
+
+  async function saveWorkflow() {
+    if (!workflow || !dirty) return;
+    saveButton.disabled = true;
+    saveButton.textContent = "Saving…";
+    try {
+      workflow = await api("/api/flow/workflow", {
+        method: "PUT",
+        body: JSON.stringify({ workflow }),
+      });
+      markSaved();
+      renderCanvas();
+      renderSelectedNode();
+      showToast("Workflow saved as v" + workflow.version + ".");
+    } catch (error) {
+      saveButton.disabled = false;
+      showToast(error.message);
+    } finally {
+      saveButton.textContent = "Save workflow";
+    }
+  }
+
   async function startRun() {
+    if (dirty) {
+      showToast("Save workflow changes before running.");
+      return;
+    }
+
     let parsed;
     try {
       parsed = JSON.parse(input.value);
@@ -148,7 +307,7 @@
     } catch (error) {
       showToast(error.message);
     } finally {
-      runButton.disabled = false;
+      runButton.disabled = dirty;
       runButton.textContent = "Run workflow";
     }
   }
@@ -173,15 +332,17 @@
 
   async function init() {
     try {
-      workflow = await api("/api/flow/workflow");
-      renderRun();
+      await loadWorkflow();
     } catch (error) {
       showToast(error.message);
       canvas.textContent = "Unable to load workflow definition.";
+      saveState.textContent = "Load failed";
     }
   }
 
   runButton.addEventListener("click", startRun);
+  saveButton.addEventListener("click", saveWorkflow);
+  reloadButton.addEventListener("click", () => loadWorkflow({ notify: true }).catch((error) => showToast(error.message)));
   approveButton.addEventListener("click", () => resolveApproval("approve"));
   rejectButton.addEventListener("click", () => resolveApproval("reject"));
   init();

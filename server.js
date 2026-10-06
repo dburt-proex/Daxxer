@@ -84,7 +84,13 @@ async function handleApi(req, res, url) {
 
     // ---- DAXXER Flow v0.1 executable spine ----
     if (pathname === "/api/flow/workflow" && method === "GET")
-      return sendJSON(res, 200, flowRuntime.workflowDefinition());
+      return sendJSON(res, 200, await flowRuntime.workflowDefinition());
+
+    if (pathname === "/api/flow/workflow" && method === "PUT") {
+      const body = await readBody(req);
+      const workflow = await flowRuntime.saveWorkflow(body.workflow ?? body);
+      return sendJSON(res, 200, workflow);
+    }
 
     if (pathname === "/api/flow/runs" && method === "POST") {
       const body = await readBody(req);
